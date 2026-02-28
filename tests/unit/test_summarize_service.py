@@ -25,7 +25,10 @@ def _make_mock_extractor() -> MagicMock:
         pdf_path="/path/to/doc.pdf",
         pdf_hash="abc123hash",
         page_count=5,
-        pages=[ExtractedPage(page_number=i, text=f"ページ{i}のテキスト") for i in range(1, 6)],
+        pages=[
+            ExtractedPage(page_number=i, text=f"ページ{i}のテキスト")
+            for i in range(1, 6)
+        ],
         total_text="テスト用テキスト",
     )
     return extractor

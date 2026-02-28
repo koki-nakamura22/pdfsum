@@ -6,11 +6,11 @@ from unittest.mock import patch
 import pytest
 
 from pdfsum.config.manager import (
-    ConfigManager,
     DEFAULT_DB_PATH,
     DEFAULT_MODEL,
     DEFAULT_PROVIDER,
     DEFAULT_SUMMARY_LENGTH,
+    ConfigManager,
 )
 from pdfsum.models.summary import ConfigError
 
