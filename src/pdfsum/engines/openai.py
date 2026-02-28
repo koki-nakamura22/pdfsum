@@ -1,0 +1,89 @@
+"""OpenAI APIを使用した要約エンジン"""
+
+import httpx
+
+from pdfsum.engines.base import (
+    SUMMARY_PROMPTS,
+    SummarizerEngine,
+    retry_on_rate_limit,
+)
+from pdfsum.models.summary import SummarizationError
+
+OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
+DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
+OPENAI_MAX_INPUT_TOKENS = 128_000
+OPENAI_TIMEOUT_SECONDS = 120
+
+
+class OpenAISummarizer(SummarizerEngine):
+    """OpenAI APIを使用した要約エンジン"""
+
+    def __init__(self, api_key: str, model: str = DEFAULT_OPENAI_MODEL) -> None:
+        self._api_key = api_key
+        self._model = model
+
+    @retry_on_rate_limit
+    def summarize(self, text: str, length: str) -> str:
+        """OpenAI APIでテキストを要約する。
+
+        Args:
+            text: 要約対象のテキスト
+            length: 要約の長さ ("short", "standard", "detailed")
+
+        Returns:
+            要約テキスト
+
+        Raises:
+            SummarizationError: API通信エラーまたは要約生成失敗
+        """
+        prompt = SUMMARY_PROMPTS[length]
+
+        payload = {
+            "model": self._model,
+            "messages": [
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": text},
+            ],
+        }
+
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            response = httpx.post(
+                OPENAI_API_URL,
+                json=payload,
+                headers=headers,
+                timeout=OPENAI_TIMEOUT_SECONDS,
+            )
+        except httpx.HTTPError as e:
+            raise SummarizationError(
+                f"LLM APIとの通信に失敗しました: {e}"
+            ) from e
+
+        if response.status_code == 429:
+            raise SummarizationError(
+                f"APIレート制限に達しました (429): {response.text}"
+            )
+
+        if response.status_code != 200:
+            raise SummarizationError(
+                f"LLM APIとの通信に失敗しました: "
+                f"ステータス {response.status_code}: {response.text}"
+            )
+
+        try:
+            data = response.json()
+            return data["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, ValueError) as e:
+            raise SummarizationError(
+                f"LLM APIのレスポンス解析に失敗しました: {e}"
+            ) from e
+
+    def get_model_name(self) -> str:
+        return self._model
+
+    def get_max_input_tokens(self) -> int:
+        return OPENAI_MAX_INPUT_TOKENS
