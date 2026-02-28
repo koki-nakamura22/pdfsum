@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# 仮想環境
+.venv/
+venv/
+
+# テスト・カバレッジ
+.coverage
+htmlcov/
+.pytest_cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 環境設定
+.env
+.env.local
+
+# ステアリング
+.steering/
+
+# mypy
+.mypy_cache/
+
+# ruff
+.ruff_cache/
