@@ -42,6 +42,13 @@ class PDFExtractor:
                 "パスワード保護されている可能性があります"
             ) from e
 
+        if doc.needs_pass:
+            doc.close()
+            raise ExtractionError(
+                "PDFの読み取りに失敗しました。ファイルが破損しているか、"
+                "パスワード保護されている可能性があります"
+            )
+
         pages: list[ExtractedPage] = []
         try:
             for i in range(len(doc)):
@@ -77,12 +84,20 @@ class PDFExtractor:
 
         Returns:
             64文字の16進数ハッシュ文字列
+
+        Raises:
+            ExtractionError: ファイル読み取りに失敗した場合
         """
-        sha256 = hashlib.sha256()
-        with open(pdf_path, "rb") as f:
-            while True:
-                chunk = f.read(HASH_CHUNK_SIZE)
-                if not chunk:
-                    break
-                sha256.update(chunk)
-        return sha256.hexdigest()
+        try:
+            sha256 = hashlib.sha256()
+            with open(pdf_path, "rb") as f:
+                while True:
+                    chunk = f.read(HASH_CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    sha256.update(chunk)
+            return sha256.hexdigest()
+        except OSError as e:
+            raise ExtractionError(
+                f"PDFファイルのハッシュ算出に失敗しました: {e}"
+            ) from e

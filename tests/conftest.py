@@ -26,20 +26,29 @@ def sample_pdf_en(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def sample_pdf_ja(tmp_path: Path) -> Path:
-    """テスト用の日本語PDFファイルを生成する"""
+    """テスト用の日本語PDFファイルを生成する。
+
+    pymupdf.Story APIを使いHTML経由で日本語テキストを埋め込む。
+    環境にCJKフォントがなくてもpymupdf組み込みフォントで生成できる。
+    """
     pdf_path = tmp_path / "sample_ja.pdf"
-    doc = pymupdf.open()
-    page = doc.new_page()
-    # CJKフォントを使用して日本語テキストを挿入
-    page.insert_text(
-        (72, 72),
-        "これはテスト用のPDFドキュメントです。\n"
-        "日本語テキストの抽出を検証します。",
-        fontname="japan",
-        fontsize=12,
+    html = (
+        '<p style="font-family: sans-serif;">'
+        "これはテスト用のPDFドキュメントです。"
+        "日本語テキストの抽出を検証します。"
+        "</p>"
     )
-    doc.save(str(pdf_path))
-    doc.close()
+    story = pymupdf.Story(html=html)
+    writer = pymupdf.DocumentWriter(str(pdf_path))
+    mediabox = pymupdf.paper_rect("a4")
+    where = mediabox + pymupdf.Rect(72, 72, -72, -72)
+    more = True
+    while more:
+        dev = writer.begin_page(mediabox)
+        more, _ = story.place(where)
+        story.draw(dev)
+        writer.end_page()
+    writer.close()
     return pdf_path
 
 
