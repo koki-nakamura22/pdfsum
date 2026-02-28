@@ -1,5 +1,7 @@
 """python -m pdfsum でCLIを起動するためのエントリポイント"""
 
+import sys
+
 from pdfsum.cli.app import main
 
-main()
+sys.exit(main())
