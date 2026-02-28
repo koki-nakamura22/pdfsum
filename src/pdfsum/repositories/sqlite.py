@@ -42,6 +42,21 @@ class SQLiteSummaryRepository(SummaryRepository):
         self._conn.execute(CREATE_INDEX_SQL)
         self._conn.commit()
 
+    def close(self) -> None:
+        """DB接続を閉じる"""
+        self._conn.close()
+
+    def __enter__(self) -> "SQLiteSummaryRepository":
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object,
+    ) -> None:
+        self.close()
+
     def _ensure_directory(self, db_path: str) -> None:
         """DBファイルの親ディレクトリを作成し、権限を設定する"""
         if db_path == ":memory:":

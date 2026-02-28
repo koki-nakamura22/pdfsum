@@ -29,7 +29,7 @@ class TestConfigManagerLoad:
         assert config.llm.provider == DEFAULT_PROVIDER
         assert config.llm.model == DEFAULT_MODEL
         assert config.summary.default_length == DEFAULT_SUMMARY_LENGTH
-        assert config.database.path == DEFAULT_DB_PATH
+        assert config.database.path == str(Path(DEFAULT_DB_PATH).expanduser())
 
     def test_load_reads_toml_config(self, tmp_path: Path) -> None:
         """TOML設定ファイルを読み込めること"""

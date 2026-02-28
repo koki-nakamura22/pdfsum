@@ -56,6 +56,9 @@ class DatabaseConfig:
 
     path: str = DEFAULT_DB_PATH
 
+    def __post_init__(self) -> None:
+        self.path = str(Path(self.path).expanduser())
+
 
 @dataclass
 class Config:
