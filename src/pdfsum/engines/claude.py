@@ -82,7 +82,8 @@ class ClaudeSummarizer(SummarizerEngine):
 
         try:
             data = response.json()
-            return data["content"][0]["text"]
+            result: str = data["content"][0]["text"]
+            return result
         except (KeyError, IndexError, ValueError) as e:
             raise SummarizationError(
                 f"LLM APIのレスポンス解析に失敗しました: {e}"

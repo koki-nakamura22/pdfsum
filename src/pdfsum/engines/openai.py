@@ -76,7 +76,8 @@ class OpenAISummarizer(SummarizerEngine):
 
         try:
             data = response.json()
-            return data["choices"][0]["message"]["content"]
+            result: str = data["choices"][0]["message"]["content"]
+            return result
         except (KeyError, IndexError, ValueError) as e:
             raise SummarizationError(
                 f"LLM APIのレスポンス解析に失敗しました: {e}"

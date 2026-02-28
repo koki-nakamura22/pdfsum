@@ -74,7 +74,8 @@ class GeminiSummarizer(SummarizerEngine):
 
         try:
             data = response.json()
-            return data["candidates"][0]["content"]["parts"][0]["text"]
+            result: str = data["candidates"][0]["content"]["parts"][0]["text"]
+            return result
         except (KeyError, IndexError, ValueError) as e:
             raise SummarizationError(
                 f"LLM APIのレスポンス解析に失敗しました: {e}"
