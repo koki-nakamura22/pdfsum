@@ -109,3 +109,34 @@ class TestChunkedSummarizerSummarize:
 
         # 再帰上限(5回)以内で完了すること
         assert result is not None
+
+    def test_split_by_size_truncates_oversized_paragraph(self) -> None:
+        """単一段落がmax_tokensを超える場合に切り詰める"""
+        engine = _make_mock_engine(max_tokens=50)
+        engine.summarize.return_value = "切り詰め要約"
+        chunked = ChunkedSummarizer(engine)
+
+        # 1つの段落がmax_tokensを大幅に超えるテキスト（段落区切りなし）
+        oversized_text = "あ" * 500
+        chunked.summarize(oversized_text, "standard")
+
+        # エンジンが呼ばれ、テキストが切り詰められていることを確認
+        first_call_text = engine.summarize.call_args_list[0][0][0]
+        assert len(first_call_text) < len(oversized_text)
+
+    def test_split_by_pages_truncates_oversized_page(self) -> None:
+        """単一ページがmax_tokensを超える場合に切り詰める"""
+        engine = _make_mock_engine(max_tokens=50)
+        engine.summarize.return_value = "切り詰め要約"
+        chunked = ChunkedSummarizer(engine)
+
+        pages = [
+            ExtractedPage(page_number=1, text="あ" * 500),
+        ]
+        total_text = pages[0].text
+
+        chunked.summarize(total_text, "standard", pages=pages)
+
+        # エンジンが呼ばれ、テキストが切り詰められていることを確認
+        first_call_text = engine.summarize.call_args_list[0][0][0]
+        assert len(first_call_text) < len(total_text)

@@ -100,6 +100,24 @@ class TestGeminiSummarizer:
         assert mock_post.call_count == 2
         mock_sleep.assert_called_once()
 
+    @patch("pdfsum.engines.gemini.httpx.post")
+    @patch("pdfsum.engines.base.time.sleep")
+    def test_summarize_raises_after_max_retries(
+        self, mock_sleep: MagicMock, mock_post: MagicMock
+    ) -> None:
+        """429が連続した場合、最大リトライ回数後にSummarizationErrorを送出する"""
+        rate_limit_response = MagicMock()
+        rate_limit_response.status_code = 429
+        rate_limit_response.text = "Rate limited"
+
+        mock_post.return_value = rate_limit_response
+
+        with pytest.raises(SummarizationError, match="429"):
+            self.engine.summarize("テスト", "standard")
+
+        # MAX_RETRY_COUNT(3) + 1回呼ばれる
+        assert mock_post.call_count == 4
+
     def test_summarize_with_invalid_length_raises_summarization_error(self) -> None:
         """無効な要約長でSummarizationErrorを送出する"""
         with pytest.raises(SummarizationError, match="無効な要約長です"):
