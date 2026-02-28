@@ -46,7 +46,7 @@ class PDFExtractor:
         try:
             for i in range(len(doc)):
                 page = doc[i]
-                text = page.get_text()
+                text = page.get_text()  # type: ignore[attr-defined]
                 pages.append(ExtractedPage(page_number=i + 1, text=text))
         finally:
             doc.close()
@@ -55,8 +55,7 @@ class PDFExtractor:
 
         if not total_text.strip():
             raise ExtractionError(
-                "PDFからテキストを抽出できませんでした。"
-                "画像のみのPDFの可能性があります"
+                "PDFからテキストを抽出できませんでした。画像のみのPDFの可能性があります"
             )
 
         pdf_hash = self.calculate_hash(str(path))

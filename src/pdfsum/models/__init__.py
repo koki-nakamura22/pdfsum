@@ -6,8 +6,8 @@ from pdfsum.models.summary import (
     ExtractedPage,
     ExtractionError,
     PdfsumError,
-    Summary,
     SummarizationError,
+    Summary,
 )
 
 __all__ = [
