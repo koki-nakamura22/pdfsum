@@ -56,7 +56,7 @@ def _validate_id(summary_id: str) -> None:
     """
     if not _is_full_uuid(summary_id) and not _is_short_id(summary_id):
         raise PdfsumError(
-            f"無効なID形式です: {summary_id}"
+            f"無効なID形式です: {summary_id} "
             f"（UUID v4または先頭8文字の16進数を指定してください）"
         )
 

@@ -75,9 +75,36 @@ class TestCLIListCommand:
                 "PDFSUM_CONFIG_PATH": str(config_path),
             },
         )
-        # 設定ファイルの環境変数はサポートしていないため
-        # デフォルトDBパスを使う形になるが、
-        # テスト用にConfigManagerのデフォルトパスを使う
-        # 正常終了の確認（空リスト表示）
         assert result.returncode == 0
         assert "保存済みの要約はありません" in result.stdout
+
+
+class TestCLIShowCommand:
+    """show コマンドのテスト"""
+
+    def test_show_with_invalid_id_returns_exit_code_1(self) -> None:
+        """無効なID形式で終了コード1"""
+        result = _run_pdfsum("show", "invalid-id")
+        assert result.returncode == 1
+        assert "無効なID形式です" in result.stderr
+
+
+class TestCLIDeleteCommand:
+    """delete コマンドのテスト"""
+
+    def test_delete_with_invalid_id_returns_exit_code_1(self) -> None:
+        """無効なID形式で終了コード1"""
+        result = _run_pdfsum("delete", "invalid-id")
+        assert result.returncode == 1
+        assert "無効なID形式です" in result.stderr
+
+
+class TestCLISummarizeCommand:
+    """summarize コマンドのテスト"""
+
+    def test_summarize_nonexistent_file_returns_exit_code_1(
+        self,
+    ) -> None:
+        """存在しないファイル指定で終了コード1"""
+        result = _run_pdfsum("summarize", "/nonexistent/file.pdf")
+        assert result.returncode == 1

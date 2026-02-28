@@ -5,6 +5,7 @@ from datetime import datetime
 from pdfsum.cli.display import (
     print_error,
     print_progress,
+    print_success,
     print_summary_detail,
     print_summary_list,
     print_summary_result,
@@ -130,6 +131,26 @@ class TestPrintSummaryList:
         assert "doc.pdf" in captured.out
         assert "standard" in captured.out
 
+    def test_truncates_long_file_names(self, capsys: object) -> None:
+        """24文字を超えるファイル名を切り詰める"""
+        import _pytest.capture
+
+        assert isinstance(capsys, _pytest.capture.CaptureFixture)
+        summary = Summary(
+            id="a1b2c3d4-e5f6-4a8b-9c0d-e1f2a3b4c5d6",
+            pdf_path="/path/to/very_long_file_name_exceeds.pdf",
+            pdf_hash="abc123hash",
+            file_name="very_long_file_name_exceeds.pdf",
+            page_count=42,
+            summary_text="要約",
+            summary_length="standard",
+            model_name="gemini-2.5-flash",
+            created_at=datetime(2026, 2, 28, 10, 30, 0),
+        )
+        print_summary_list([summary])
+        captured = capsys.readouterr()
+        assert "..." in captured.out
+
 
 class TestPrintSummaryDetail:
     """print_summary_detail のテスト"""
@@ -179,3 +200,16 @@ class TestPrintError:
         print_error("テストエラー")
         captured = capsys.readouterr()
         assert "エラー: テストエラー" in captured.err
+
+
+class TestPrintSuccess:
+    """print_success のテスト"""
+
+    def test_displays_success_message(self, capsys: object) -> None:
+        """成功メッセージを表示する"""
+        import _pytest.capture
+
+        assert isinstance(capsys, _pytest.capture.CaptureFixture)
+        print_success("テスト成功")
+        captured = capsys.readouterr()
+        assert "テスト成功" in captured.out
