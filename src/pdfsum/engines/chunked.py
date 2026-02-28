@@ -102,6 +102,15 @@ class ChunkedSummarizer:
                 current_chunk = []
                 current_tokens = 0
 
+            # 単一ページがmax_tokensを超える場合は切り詰め
+            if page_tokens > max_tokens:
+                if current_chunk:
+                    chunks.append("\n".join(current_chunk))
+                    current_chunk = []
+                    current_tokens = 0
+                chunks.append(self._truncate_to_tokens(page.text, max_tokens))
+                continue
+
             current_chunk.append(page.text)
             current_tokens += page_tokens
 
@@ -124,6 +133,15 @@ class ChunkedSummarizer:
                 chunks.append("\n\n".join(current_chunk))
                 current_chunk = []
                 current_tokens = 0
+
+            # 単一段落がmax_tokensを超える場合は切り詰め
+            if para_tokens > max_tokens:
+                if current_chunk:
+                    chunks.append("\n\n".join(current_chunk))
+                    current_chunk = []
+                    current_tokens = 0
+                chunks.append(self._truncate_to_tokens(para, max_tokens))
+                continue
 
             current_chunk.append(para)
             current_tokens += para_tokens

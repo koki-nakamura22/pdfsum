@@ -8,8 +8,8 @@ from pdfsum.models.summary import (
     ExtractedPage,
     ExtractionError,
     PdfsumError,
-    Summary,
     SummarizationError,
+    Summary,
 )
 
 

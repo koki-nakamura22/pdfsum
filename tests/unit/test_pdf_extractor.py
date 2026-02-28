@@ -85,9 +85,7 @@ class TestPDFExtractorExtract:
         with pytest.raises(ExtractionError, match="PDF以外のファイルです"):
             self.extractor.extract(str(non_pdf_file))
 
-    def test_extract_empty_pdf_raises_extraction_error(
-        self, empty_pdf: Path
-    ) -> None:
+    def test_extract_empty_pdf_raises_extraction_error(self, empty_pdf: Path) -> None:
         """テキストなしPDFでExtractionErrorが発生する"""
         with pytest.raises(ExtractionError, match="テキストを抽出できませんでした"):
             self.extractor.extract(str(empty_pdf))

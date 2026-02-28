@@ -99,3 +99,8 @@ class TestGeminiSummarizer:
         assert result == "リトライ後の要約"
         assert mock_post.call_count == 2
         mock_sleep.assert_called_once()
+
+    def test_summarize_with_invalid_length_raises_summarization_error(self) -> None:
+        """無効な要約長でSummarizationErrorを送出する"""
+        with pytest.raises(SummarizationError, match="無効な要約長です"):
+            self.engine.summarize("テスト", "invalid")

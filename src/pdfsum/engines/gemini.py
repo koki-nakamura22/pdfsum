@@ -3,8 +3,8 @@
 import httpx
 
 from pdfsum.engines.base import (
-    SUMMARY_PROMPTS,
     SummarizerEngine,
+    get_prompt_for_length,
     retry_on_rate_limit,
 )
 from pdfsum.models.summary import SummarizationError
@@ -36,7 +36,7 @@ class GeminiSummarizer(SummarizerEngine):
         Raises:
             SummarizationError: API通信エラーまたは要約生成失敗
         """
-        prompt = SUMMARY_PROMPTS[length]
+        prompt = get_prompt_for_length(length)
         url = f"{GEMINI_API_URL}/{self._model}:generateContent"
 
         payload = {

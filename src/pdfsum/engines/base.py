@@ -29,6 +29,26 @@ SUMMARY_PROMPTS: dict[str, str] = {
 VALID_LENGTHS = frozenset(SUMMARY_PROMPTS.keys())
 
 
+def get_prompt_for_length(length: str) -> str:
+    """要約長に対応するプロンプトを取得する。
+
+    Args:
+        length: 要約の長さ ("short", "standard", "detailed")
+
+    Returns:
+        プロンプト文字列
+
+    Raises:
+        SummarizationError: 無効な要約長が指定された場合
+    """
+    if length not in VALID_LENGTHS:
+        raise SummarizationError(
+            f"無効な要約長です: {length}"
+            f"（有効な値: {', '.join(sorted(VALID_LENGTHS))}）"
+        )
+    return SUMMARY_PROMPTS[length]
+
+
 class SummarizerEngine(ABC):
     """要約エンジンの抽象基底クラス"""
 

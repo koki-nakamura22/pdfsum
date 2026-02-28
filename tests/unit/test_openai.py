@@ -82,3 +82,21 @@ class TestOpenAISummarizer:
 
         assert result == "リトライ後の要約"
         assert mock_post.call_count == 2
+
+    def test_summarize_with_invalid_length_raises_summarization_error(self) -> None:
+        """無効な要約長でSummarizationErrorを送出する"""
+        with pytest.raises(SummarizationError, match="無効な要約長です"):
+            self.engine.summarize("テスト", "invalid")
+
+    @patch("pdfsum.engines.openai.httpx.post")
+    def test_summarize_with_invalid_response_raises_summarization_error(
+        self, mock_post: MagicMock
+    ) -> None:
+        """不正なレスポンス構造でSummarizationErrorを送出する"""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"invalid": "response"}
+        mock_post.return_value = mock_response
+
+        with pytest.raises(SummarizationError, match="レスポンス解析に失敗"):
+            self.engine.summarize("テスト", "standard")
