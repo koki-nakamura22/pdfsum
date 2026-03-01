@@ -5,6 +5,8 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from pdfsum.models.summary import ConfigError
 
 DEFAULT_CONFIG_PATH = "~/.config/pdfsum/config.toml"
@@ -78,12 +80,16 @@ class ConfigManager:
     def load(self) -> Config:
         """設定を読み込む。ファイルがなければデフォルト設定を返す。
 
+        .envファイルが存在する場合、環境変数として読み込む。
+
         Returns:
             設定オブジェクト
 
         Raises:
             ConfigError: 設定ファイルの読み込みに失敗した場合
         """
+        load_dotenv()
+
         if not self._config_path.exists():
             return Config()
 
