@@ -37,3 +37,6 @@ Thumbs.db
 
 # ruff
 .ruff_cache/
+
+# ドキュメント
+docs/
