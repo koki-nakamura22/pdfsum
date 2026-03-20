@@ -74,11 +74,17 @@ class Config:
 class ConfigManager:
     """設定ファイル（TOML）の読み込みとAPIキー管理"""
 
-    def __init__(self, config_path: str | None = None) -> None:
+    def __init__(
+        self,
+        config_path: str | None = None,
+        env_path: str | None = None,
+    ) -> None:
         resolved = config_path or os.environ.get(
             "PDFSUM_CONFIG_PATH", DEFAULT_CONFIG_PATH
         )
         self._config_path = Path(resolved).expanduser()
+        resolved_env = env_path or os.environ.get("PDFSUM_ENV_PATH")
+        self._env_path = resolved_env
 
     def load(self) -> Config:
         """設定を読み込む。ファイルがなければデフォルト設定を返す。
@@ -91,7 +97,7 @@ class ConfigManager:
         Raises:
             ConfigError: 設定ファイルの読み込みに失敗した場合
         """
-        load_dotenv()
+        load_dotenv(dotenv_path=self._env_path)
 
         if not self._config_path.exists():
             return Config()

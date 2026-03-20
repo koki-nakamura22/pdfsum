@@ -1,6 +1,9 @@
 """SQLiteSummaryRepository のユニットテスト"""
 
+import os
+import sqlite3
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 
@@ -149,6 +152,48 @@ class TestSQLiteSummaryRepository:
         results = self.repo.find_by_id_prefix("a1b2c3d4")
 
         assert len(results) == 2
+
+    def test_close_closes_connection(self) -> None:
+        """close()でDB接続が閉じられる"""
+        self.repo.close()
+        with pytest.raises(sqlite3.ProgrammingError):
+            self.repo.find_all()
+
+    def test_context_manager_returns_self(self) -> None:
+        """__enter__でself が返される"""
+        repo = SQLiteSummaryRepository(":memory:")
+        with repo as r:
+            assert r is repo
+
+    def test_context_manager_closes_on_exit(self) -> None:
+        """コンテキストマネージャ終了時にDB接続が閉じられる"""
+        repo = SQLiteSummaryRepository(":memory:")
+        with repo:
+            repo.save(_make_summary())
+        with pytest.raises(sqlite3.ProgrammingError):
+            repo.find_all()
+
+    def test_init_with_file_path_creates_directory(
+        self, tmp_path: Path
+    ) -> None:
+        """実ファイルパスで初期化時にディレクトリが作成される"""
+        db_path = tmp_path / "nested" / "dir" / "test.db"
+        repo = SQLiteSummaryRepository(str(db_path))
+
+        assert db_path.parent.exists()
+        assert db_path.exists()
+        repo.close()
+
+    def test_init_with_file_path_sets_permissions(
+        self, tmp_path: Path
+    ) -> None:
+        """実ファイルパスで初期化時にファイル権限が0o600に設定される"""
+        db_path = tmp_path / "perm_test.db"
+        repo = SQLiteSummaryRepository(str(db_path))
+
+        stat = os.stat(db_path)
+        assert stat.st_mode & 0o777 == 0o600
+        repo.close()
 
     @pytest.mark.parametrize("summary_length", ["short", "standard", "detailed"])
     def test_save_accepts_valid_summary_lengths(

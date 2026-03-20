@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from pdfsum.cli.app import (
+    _NullEngine,
     _is_full_uuid,
     _is_short_id,
     _validate_id,
@@ -235,6 +236,26 @@ class TestCmdDelete:
             cmd_delete(args)
 
 
+class TestNullEngine:
+    """_NullEngine のテスト"""
+
+    def test_summarize_raises_pdfsum_error(self) -> None:
+        """summarize()はPdfsumErrorを送出する"""
+        engine = _NullEngine()
+        with pytest.raises(PdfsumError, match="要約エンジンが初期化されていません"):
+            engine.summarize("テスト", "standard")
+
+    def test_get_model_name_returns_empty_string(self) -> None:
+        """get_model_name()は空文字を返す"""
+        engine = _NullEngine()
+        assert engine.get_model_name() == ""
+
+    def test_get_max_input_tokens_returns_zero(self) -> None:
+        """get_max_input_tokens()は0を返す"""
+        engine = _NullEngine()
+        assert engine.get_max_input_tokens() == 0
+
+
 class TestMainFunction:
     """main関数のテスト"""
 
@@ -265,6 +286,30 @@ class TestMainFunction:
     def test_show_with_invalid_id_returns_exit_code_1(self) -> None:
         """show で無効なID指定時に終了コード1を返す"""
         assert main(["show", "invalid"]) == 1
+
+    @patch("pdfsum.cli.app._build_service_for_readonly")
+    def test_catches_file_not_found_error_returns_exit_code_1(
+        self, mock_build: Mock
+    ) -> None:
+        """FileNotFoundErrorをキャッチして終了コード1を返す"""
+        mock_service = Mock()
+        mock_build.return_value = mock_service
+        mock_service.list_summaries.side_effect = FileNotFoundError(
+            "ファイルが見つかりません"
+        )
+
+        assert main(["list"]) == 1
+
+    @patch("pdfsum.cli.app._build_service_for_readonly")
+    def test_catches_keyboard_interrupt_returns_exit_code_130(
+        self, mock_build: Mock
+    ) -> None:
+        """KeyboardInterruptをキャッチして終了コード130を返す"""
+        mock_service = Mock()
+        mock_build.return_value = mock_service
+        mock_service.list_summaries.side_effect = KeyboardInterrupt()
+
+        assert main(["list"]) == 130
 
     def test_version_flag_exits_zero(self) -> None:
         """--version で終了コード0を返す"""

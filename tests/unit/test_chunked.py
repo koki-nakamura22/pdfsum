@@ -140,3 +140,81 @@ class TestChunkedSummarizerSummarize:
         # エンジンが呼ばれ、テキストが切り詰められていることを確認
         first_call_text = engine.summarize.call_args_list[0][0][0]
         assert len(first_call_text) < len(total_text)
+
+    def test_split_by_pages_flushes_current_chunk_before_oversized_page(
+        self,
+    ) -> None:
+        """通常ページ蓄積後に巨大ページが来た場合、蓄積分をflushしてから切り詰める"""
+        engine = _make_mock_engine(max_tokens=100)
+        engine.summarize.return_value = "要約"
+        chunked = ChunkedSummarizer(engine)
+
+        pages = [
+            ExtractedPage(page_number=1, text="あ" * 30),  # 通常サイズ
+            ExtractedPage(page_number=2, text="い" * 30),  # 通常サイズ
+            ExtractedPage(page_number=3, text="う" * 500),  # 巨大ページ
+        ]
+        total_text = "\n".join(p.text for p in pages)
+
+        chunked.summarize(total_text, "standard", pages=pages)
+
+        # 3チャンク以上: 蓄積分 + 巨大ページ(truncated) + 最終要約
+        assert engine.summarize.call_count >= 3
+
+    def test_split_by_pages_accumulates_normal_pages(self) -> None:
+        """通常サイズのページが蓄積され最後にflushされる"""
+        engine = _make_mock_engine(max_tokens=500)
+        engine.summarize.return_value = "要約"
+        chunked = ChunkedSummarizer(engine)
+
+        pages = [
+            ExtractedPage(page_number=1, text="あ" * 10),
+            ExtractedPage(page_number=2, text="い" * 10),
+            ExtractedPage(page_number=3, text="う" * 10),
+        ]
+        total_text = "\n".join(p.text for p in pages)
+
+        result = chunked.summarize(total_text, "standard", pages=pages)
+
+        # max_tokens内に収まるので直接要約される
+        assert result == "要約"
+        engine.summarize.assert_called_once()
+
+    def test_split_by_size_flushes_current_chunk_before_oversized_paragraph(
+        self,
+    ) -> None:
+        """通常段落蓄積後に巨大段落が来た場合、蓄積分をflushしてから切り詰める"""
+        engine = _make_mock_engine(max_tokens=100)
+        engine.summarize.return_value = "要約"
+        chunked = ChunkedSummarizer(engine)
+
+        # 通常段落 + 巨大段落を段落区切りで結合
+        text = "あ" * 30 + "\n\n" + "い" * 30 + "\n\n" + "う" * 500
+
+        chunked.summarize(text, "standard")
+
+        # 3チャンク以上: 蓄積分 + 巨大段落(truncated) + 最終要約
+        assert engine.summarize.call_count >= 3
+
+    def test_split_by_size_accumulates_normal_paragraphs(self) -> None:
+        """通常サイズの段落が蓄積され最後にflushされる"""
+        engine = _make_mock_engine(max_tokens=500)
+        engine.summarize.return_value = "要約"
+        chunked = ChunkedSummarizer(engine)
+
+        text = "あ" * 10 + "\n\n" + "い" * 10 + "\n\n" + "う" * 10
+
+        result = chunked.summarize(text, "standard")
+
+        # max_tokens内に収まるので直接要約される
+        assert result == "要約"
+        engine.summarize.assert_called_once()
+
+    def test_truncate_to_tokens_returns_text_within_limit(self) -> None:
+        """トークン上限内のテキストはそのまま返す"""
+        engine = _make_mock_engine(max_tokens=1000)
+        chunked = ChunkedSummarizer(engine)
+
+        short_text = "あ" * 10  # 15トークン程度
+        result = chunked._truncate_to_tokens(short_text, 1000)
+        assert result == short_text

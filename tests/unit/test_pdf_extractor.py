@@ -1,6 +1,7 @@
 """PDFExtractor のユニットテスト"""
 
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -98,6 +99,22 @@ class TestPDFExtractorExtract:
         corrupted.write_bytes(b"not a real pdf content")
         with pytest.raises(ExtractionError, match="読み取りに失敗しました"):
             self.extractor.extract(str(corrupted))
+
+    def test_extract_password_protected_pdf_raises_extraction_error(
+        self, sample_pdf_en: Path
+    ) -> None:
+        """パスワード保護されたPDFでExtractionErrorが発生する"""
+        mock_doc = MagicMock()
+        mock_doc.needs_pass = True
+
+        with patch(
+            "pdfsum.extractors.pdf_extractor.pymupdf.open",
+            return_value=mock_doc,
+        ):
+            with pytest.raises(
+                ExtractionError, match="パスワード保護されている可能性があります"
+            ):
+                self.extractor.extract(str(sample_pdf_en))
 
 
 class TestPDFExtractorCalculateHash:
