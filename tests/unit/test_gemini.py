@@ -5,7 +5,11 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from pdfsum.engines.gemini import GeminiSummarizer
+from pdfsum.engines.gemini import (
+    DEFAULT_GEMINI_MODEL,
+    GEMINI_MODEL_SPECS,
+    GeminiSummarizer,
+)
 from pdfsum.models.summary import SummarizationError
 
 
@@ -18,8 +22,28 @@ class TestGeminiSummarizer:
     def test_get_model_name_returns_model(self) -> None:
         assert self.engine.get_model_name() == "gemini-2.5-flash"
 
-    def test_get_max_input_tokens_returns_1m(self) -> None:
-        assert self.engine.get_max_input_tokens() == 1_000_000
+    def test_get_max_input_tokens_returns_spec_value(self) -> None:
+        assert self.engine.get_max_input_tokens() == 1_048_576
+
+    def test_default_model_is_used_when_no_model_specified(self) -> None:
+        engine = GeminiSummarizer(api_key="test-key")
+        assert engine.get_model_name() == DEFAULT_GEMINI_MODEL
+
+    @pytest.mark.parametrize(
+        ("model", "specs"),
+        GEMINI_MODEL_SPECS.items(),
+    )
+    def test_all_supported_models_have_correct_specs(
+        self, model: str, specs: dict[str, int]
+    ) -> None:
+        engine = GeminiSummarizer(api_key="test-key", model=model)
+        assert engine.get_model_name() == model
+        assert engine.get_max_input_tokens() == specs["max_input_tokens"]
+        assert engine._specs["max_output_tokens"] == specs["max_output_tokens"]
+
+    def test_unsupported_model_raises_error(self) -> None:
+        with pytest.raises(SummarizationError, match="未対応のGeminiモデル"):
+            GeminiSummarizer(api_key="test-key", model="gemini-unknown")
 
     @patch("pdfsum.engines.gemini.httpx.post")
     def test_summarize_returns_summary_text(self, mock_post: MagicMock) -> None:

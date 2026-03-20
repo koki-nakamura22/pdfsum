@@ -11,18 +11,39 @@ from pdfsum.models.summary import SummarizationError
 
 CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
 DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6"
-CLAUDE_MAX_INPUT_TOKENS = 1_000_000
 CLAUDE_TIMEOUT_SECONDS = 120
 CLAUDE_API_VERSION = "2023-06-01"
-CLAUDE_MAX_OUTPUT_TOKENS = 8192
+
+CLAUDE_MODEL_SPECS: dict[str, dict[str, int]] = {
+    "claude-opus-4-6": {
+        "max_input_tokens": 1_000_000,
+        "max_output_tokens": 128_000,
+    },
+    "claude-sonnet-4-6": {
+        "max_input_tokens": 1_000_000,
+        "max_output_tokens": 64_000,
+    },
+    "claude-haiku-4-5-20251001": {
+        "max_input_tokens": 200_000,
+        "max_output_tokens": 64_000,
+    },
+}
+
+SUPPORTED_CLAUDE_MODELS = frozenset(CLAUDE_MODEL_SPECS.keys())
 
 
 class ClaudeSummarizer(SummarizerEngine):
     """Anthropic Claude APIを使用した要約エンジン"""
 
     def __init__(self, api_key: str, model: str = DEFAULT_CLAUDE_MODEL) -> None:
+        if model not in SUPPORTED_CLAUDE_MODELS:
+            raise SummarizationError(
+                f"未対応のClaudeモデルです: {model}"
+                f"（対応モデル: {', '.join(sorted(SUPPORTED_CLAUDE_MODELS))}）"
+            )
         self._api_key = api_key
         self._model = model
+        self._specs = CLAUDE_MODEL_SPECS[model]
 
     @retry_on_rate_limit
     def summarize(self, text: str, length: str) -> str:
@@ -42,7 +63,7 @@ class ClaudeSummarizer(SummarizerEngine):
 
         payload = {
             "model": self._model,
-            "max_tokens": CLAUDE_MAX_OUTPUT_TOKENS,
+            "max_tokens": self._specs["max_output_tokens"],
             "messages": [
                 {
                     "role": "user",
@@ -93,4 +114,4 @@ class ClaudeSummarizer(SummarizerEngine):
         return self._model
 
     def get_max_input_tokens(self) -> int:
-        return CLAUDE_MAX_INPUT_TOKENS
+        return self._specs["max_input_tokens"]

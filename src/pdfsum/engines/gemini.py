@@ -11,16 +11,38 @@ from pdfsum.models.summary import SummarizationError
 
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
-GEMINI_MAX_INPUT_TOKENS = 1_000_000
 GEMINI_TIMEOUT_SECONDS = 120
+
+GEMINI_MODEL_SPECS: dict[str, dict[str, int]] = {
+    "gemini-2.5-flash": {
+        "max_input_tokens": 1_048_576,
+        "max_output_tokens": 65_535,
+    },
+    "gemini-2.5-flash-lite": {
+        "max_input_tokens": 1_048_576,
+        "max_output_tokens": 65_535,
+    },
+    "gemini-2.5-pro": {
+        "max_input_tokens": 1_048_576,
+        "max_output_tokens": 65_535,
+    },
+}
+
+SUPPORTED_GEMINI_MODELS = frozenset(GEMINI_MODEL_SPECS.keys())
 
 
 class GeminiSummarizer(SummarizerEngine):
     """Google Gemini APIを使用した要約エンジン"""
 
     def __init__(self, api_key: str, model: str = DEFAULT_GEMINI_MODEL) -> None:
+        if model not in SUPPORTED_GEMINI_MODELS:
+            raise SummarizationError(
+                f"未対応のGeminiモデルです: {model}"
+                f"（対応モデル: {', '.join(sorted(SUPPORTED_GEMINI_MODELS))}）"
+            )
         self._api_key = api_key
         self._model = model
+        self._specs = GEMINI_MODEL_SPECS[model]
 
     @retry_on_rate_limit
     def summarize(self, text: str, length: str) -> str:
@@ -85,4 +107,4 @@ class GeminiSummarizer(SummarizerEngine):
         return self._model
 
     def get_max_input_tokens(self) -> int:
-        return GEMINI_MAX_INPUT_TOKENS
+        return self._specs["max_input_tokens"]

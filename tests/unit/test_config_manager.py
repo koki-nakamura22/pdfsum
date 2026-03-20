@@ -6,6 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from pdfsum.config.manager import (
+    DEFAULT_CONFIG_PATH,
     DEFAULT_DB_PATH,
     DEFAULT_MODEL,
     DEFAULT_PROVIDER,
@@ -94,6 +95,56 @@ class TestConfigManagerLoad:
         assert config.llm.providers["gemini"].api_key_env == "GEMINI_API_KEY"
         assert config.llm.providers["claude"].api_key_env == "ANTHROPIC_API_KEY"
         assert config.llm.providers["openai"].api_key_env == "OPENAI_API_KEY"
+
+
+class TestConfigManagerConfigPath:
+    """ConfigManager のconfig_path解決テスト"""
+
+    def test_uses_env_var_when_no_arg_given(self, tmp_path: Path) -> None:
+        """引数なしの場合、環境変数PDFSUM_CONFIG_PATHを使用する"""
+        config_path = tmp_path / "custom_config.toml"
+        config_path.write_text(
+            '[llm]\nprovider = "openai"\n'
+        )
+
+        with patch.dict(
+            "os.environ", {"PDFSUM_CONFIG_PATH": str(config_path)}
+        ):
+            manager = ConfigManager()
+            config = manager.load()
+
+        assert config.llm.provider == "openai"
+
+    def test_uses_default_path_when_no_env_var(self) -> None:
+        """環境変数も引数もない場合、デフォルトパスを使用する"""
+        with patch.dict(
+            "os.environ", {}, clear=False
+        ):
+            # PDFSUM_CONFIG_PATHを除去
+            import os
+            os.environ.pop("PDFSUM_CONFIG_PATH", None)
+            manager = ConfigManager()
+
+        assert manager._config_path == Path(DEFAULT_CONFIG_PATH).expanduser()
+
+    def test_arg_takes_precedence_over_env_var(self, tmp_path: Path) -> None:
+        """引数指定時は環境変数より優先される"""
+        arg_config = tmp_path / "arg_config.toml"
+        arg_config.write_text(
+            '[llm]\nprovider = "claude"\n'
+        )
+        env_config = tmp_path / "env_config.toml"
+        env_config.write_text(
+            '[llm]\nprovider = "openai"\n'
+        )
+
+        with patch.dict(
+            "os.environ", {"PDFSUM_CONFIG_PATH": str(env_config)}
+        ):
+            manager = ConfigManager(str(arg_config))
+            config = manager.load()
+
+        assert config.llm.provider == "claude"
 
 
 class TestConfigManagerGetApiKey:

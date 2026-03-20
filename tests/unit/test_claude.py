@@ -5,7 +5,11 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from pdfsum.engines.claude import ClaudeSummarizer
+from pdfsum.engines.claude import (
+    CLAUDE_MODEL_SPECS,
+    DEFAULT_CLAUDE_MODEL,
+    ClaudeSummarizer,
+)
 from pdfsum.models.summary import SummarizationError
 
 
@@ -20,8 +24,28 @@ class TestClaudeSummarizer:
     def test_get_model_name_returns_model(self) -> None:
         assert self.engine.get_model_name() == "claude-sonnet-4-6"
 
-    def test_get_max_input_tokens_returns_1m(self) -> None:
+    def test_get_max_input_tokens_returns_spec_value(self) -> None:
         assert self.engine.get_max_input_tokens() == 1_000_000
+
+    def test_default_model_is_used_when_no_model_specified(self) -> None:
+        engine = ClaudeSummarizer(api_key="test-key")
+        assert engine.get_model_name() == DEFAULT_CLAUDE_MODEL
+
+    @pytest.mark.parametrize(
+        ("model", "specs"),
+        CLAUDE_MODEL_SPECS.items(),
+    )
+    def test_all_supported_models_have_correct_specs(
+        self, model: str, specs: dict[str, int]
+    ) -> None:
+        engine = ClaudeSummarizer(api_key="test-key", model=model)
+        assert engine.get_model_name() == model
+        assert engine.get_max_input_tokens() == specs["max_input_tokens"]
+        assert engine._specs["max_output_tokens"] == specs["max_output_tokens"]
+
+    def test_unsupported_model_raises_error(self) -> None:
+        with pytest.raises(SummarizationError, match="未対応のClaudeモデル"):
+            ClaudeSummarizer(api_key="test-key", model="claude-unknown")
 
     @patch("pdfsum.engines.claude.httpx.post")
     def test_summarize_returns_summary_text(self, mock_post: MagicMock) -> None:

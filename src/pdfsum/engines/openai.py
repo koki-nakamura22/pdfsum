@@ -11,16 +11,50 @@ from pdfsum.models.summary import SummarizationError
 
 OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 DEFAULT_OPENAI_MODEL = "gpt-4.1-mini"
-OPENAI_MAX_INPUT_TOKENS = 1_000_000
 OPENAI_TIMEOUT_SECONDS = 120
+
+OPENAI_MODEL_SPECS: dict[str, dict[str, int]] = {
+    "gpt-5.4": {
+        "max_input_tokens": 1_000_000,
+        "max_output_tokens": 128_000,
+    },
+    "gpt-5.4-mini": {
+        "max_input_tokens": 400_000,
+        "max_output_tokens": 128_000,
+    },
+    "gpt-5.4-nano": {
+        "max_input_tokens": 400_000,
+        "max_output_tokens": 128_000,
+    },
+    "gpt-4.1": {
+        "max_input_tokens": 1_047_576,
+        "max_output_tokens": 32_768,
+    },
+    "gpt-4.1-mini": {
+        "max_input_tokens": 1_047_576,
+        "max_output_tokens": 32_768,
+    },
+    "gpt-4.1-nano": {
+        "max_input_tokens": 1_047_576,
+        "max_output_tokens": 32_768,
+    },
+}
+
+SUPPORTED_OPENAI_MODELS = frozenset(OPENAI_MODEL_SPECS.keys())
 
 
 class OpenAISummarizer(SummarizerEngine):
     """OpenAI APIを使用した要約エンジン"""
 
     def __init__(self, api_key: str, model: str = DEFAULT_OPENAI_MODEL) -> None:
+        if model not in SUPPORTED_OPENAI_MODELS:
+            raise SummarizationError(
+                f"未対応のOpenAIモデルです: {model}"
+                f"（対応モデル: {', '.join(sorted(SUPPORTED_OPENAI_MODELS))}）"
+            )
         self._api_key = api_key
         self._model = model
+        self._specs = OPENAI_MODEL_SPECS[model]
 
     @retry_on_rate_limit
     def summarize(self, text: str, length: str) -> str:
@@ -87,4 +121,4 @@ class OpenAISummarizer(SummarizerEngine):
         return self._model
 
     def get_max_input_tokens(self) -> int:
-        return OPENAI_MAX_INPUT_TOKENS
+        return self._specs["max_input_tokens"]

@@ -74,8 +74,11 @@ class Config:
 class ConfigManager:
     """設定ファイル（TOML）の読み込みとAPIキー管理"""
 
-    def __init__(self, config_path: str = DEFAULT_CONFIG_PATH) -> None:
-        self._config_path = Path(config_path).expanduser()
+    def __init__(self, config_path: str | None = None) -> None:
+        resolved = config_path or os.environ.get(
+            "PDFSUM_CONFIG_PATH", DEFAULT_CONFIG_PATH
+        )
+        self._config_path = Path(resolved).expanduser()
 
     def load(self) -> Config:
         """設定を読み込む。ファイルがなければデフォルト設定を返す。

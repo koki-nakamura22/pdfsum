@@ -82,13 +82,22 @@ pdfsum show <summary-id>  # 8文字のIDプレフィックスでもOK
 pdfsum delete <summary-id>
 ```
 
-## 対応エンジン
+## 対応モデル
 
-| プロバイダ | デフォルトモデル | コンテキスト上限 |
-|-----------|-----------------|----------------|
-| Gemini    | gemini-2.5-flash | 1,000,000 tokens |
-| Claude    | claude-sonnet-4-6 | 1,000,000 tokens |
-| OpenAI    | gpt-4.1-mini | 1,000,000 tokens |
+| プロバイダ | モデル | 入力上限 | 出力上限 | デフォルト |
+|-----------|--------|---------|---------|-----------|
+| Gemini    | gemini-2.5-flash | 1,048,576 | 65,535 | ✅ |
+| Gemini    | gemini-2.5-flash-lite | 1,048,576 | 65,535 | |
+| Gemini    | gemini-2.5-pro | 1,048,576 | 65,535 | |
+| Claude    | claude-opus-4-6 | 1,000,000 | 128,000 | |
+| Claude    | claude-sonnet-4-6 | 1,000,000 | 64,000 | ✅ |
+| Claude    | claude-haiku-4-5-20251001 | 200,000 | 64,000 | |
+| OpenAI    | gpt-5.4 | 1,000,000 | 128,000 | |
+| OpenAI    | gpt-5.4-mini | 400,000 | 128,000 | |
+| OpenAI    | gpt-5.4-nano | 400,000 | 128,000 | |
+| OpenAI    | gpt-4.1 | 1,047,576 | 32,768 | |
+| OpenAI    | gpt-4.1-mini | 1,047,576 | 32,768 | ✅ |
+| OpenAI    | gpt-4.1-nano | 1,047,576 | 32,768 | |
 
 ## 開発
 
