@@ -7,9 +7,9 @@ from unittest.mock import Mock, patch
 import pytest
 
 from pdfsum.cli.app import (
-    _NullEngine,
     _is_full_uuid,
     _is_short_id,
+    _NullEngine,
     _validate_id,
     cmd_delete,
     cmd_list,

@@ -3,8 +3,8 @@
 from pathlib import Path
 from unittest.mock import patch
 
+import pypdfium2 as pdfium
 import pytest
-from pdfminer.pdfdocument import PDFPasswordIncorrect
 
 from pdfsum.extractors.pdf_extractor import PDFExtractor
 from pdfsum.models.summary import ExtractionError
@@ -106,8 +106,8 @@ class TestPDFExtractorExtract:
     ) -> None:
         """パスワード保護されたPDFでExtractionErrorが発生する"""
         with patch(
-            "pdfsum.extractors.pdf_extractor.PDFPage.get_pages",
-            side_effect=PDFPasswordIncorrect,
+            "pdfsum.extractors.pdf_extractor.pdfium.PdfDocument",
+            side_effect=pdfium.PdfiumError("password required"),
         ):
             with pytest.raises(
                 ExtractionError, match="パスワード保護されている可能性があります"

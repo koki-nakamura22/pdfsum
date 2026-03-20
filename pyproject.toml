@@ -5,7 +5,7 @@ description = "PDFドキュメント要約CLIツール"
 license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
-    "pdfminer.six>=20221105",
+    "pypdfium2>=4.0",
     "httpx>=0.27,<1.0",
     "tomli-w>=1.0",
     "python-dotenv>=1.2.1",
@@ -49,5 +49,5 @@ disallow_untyped_defs = true
 mypy_path = "src"
 
 [[tool.mypy.overrides]]
-module = ["pdfminer.*", "reportlab.*"]
+module = ["pypdfium2", "pypdfium2.*", "reportlab.*"]
 ignore_missing_imports = true

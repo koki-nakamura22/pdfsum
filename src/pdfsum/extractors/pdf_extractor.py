@@ -1,13 +1,9 @@
 """PDFファイルからのテキスト抽出"""
 
 import hashlib
-from io import BytesIO
 from pathlib import Path
 
-from pdfminer.high_level import extract_text
-from pdfminer.pdfdocument import PDFPasswordIncorrect
-from pdfminer.pdfpage import PDFPage
-from pdfminer.pdfparser import PDFSyntaxError
+import pypdfium2 as pdfium
 
 from pdfsum.models.summary import ExtractedDocument, ExtractedPage, ExtractionError
 
@@ -39,31 +35,17 @@ class PDFExtractor:
             raise ExtractionError(f"PDF以外のファイルです: {path.suffix}")
 
         try:
-            pdf_bytes = path.read_bytes()
-        except OSError as e:
-            raise ExtractionError(
-                "PDFの読み取りに失敗しました。ファイルが破損しているか、"
-                "パスワード保護されている可能性があります"
-            ) from e
-
-        try:
-            page_list = list(
-                PDFPage.get_pages(BytesIO(pdf_bytes), check_extractable=False)
-            )
-        except PDFPasswordIncorrect as e:
-            raise ExtractionError(
-                "PDFの読み取りに失敗しました。ファイルが破損しているか、"
-                "パスワード保護されている可能性があります"
-            ) from e
-        except (PDFSyntaxError, Exception) as e:
+            doc = pdfium.PdfDocument(str(path))
+        except pdfium.PdfiumError as e:
             raise ExtractionError(
                 "PDFの読み取りに失敗しました。ファイルが破損しているか、"
                 "パスワード保護されている可能性があります"
             ) from e
 
         pages: list[ExtractedPage] = []
-        for i in range(len(page_list)):
-            text = extract_text(BytesIO(pdf_bytes), page_numbers=[i])
+        for i in range(len(doc)):
+            textpage = doc[i].get_textpage()
+            text = textpage.get_text_range()
             pages.append(ExtractedPage(page_number=i + 1, text=text))
 
         total_text = "\n".join(p.text for p in pages)
