@@ -1,14 +1,20 @@
 """要約エンジンの抽象基底クラスと共通定義"""
 
+from __future__ import annotations
+
 import time
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 from pdfsum.models.summary import SummarizationError
+
+if TYPE_CHECKING:
+    from pdfsum.config.manager import SummaryConfig
 
 MAX_RETRY_COUNT = 3
 RETRY_BASE_DELAY_SECONDS = 1
 
-SUMMARY_PROMPTS: dict[str, str] = {
+DEFAULT_PROMPTS: dict[str, str] = {
     "short": (
         "以下のテキストの要点のみを箇条書きで簡潔に要約してください。"
         "300〜500文字程度で、最も重要なポイントだけを抽出してください。"
@@ -26,14 +32,21 @@ SUMMARY_PROMPTS: dict[str, str] = {
     ),
 }
 
-VALID_LENGTHS = frozenset(SUMMARY_PROMPTS.keys())
+VALID_LENGTHS = frozenset(DEFAULT_PROMPTS.keys())
 
 
-def get_prompt_for_length(length: str) -> str:
+def get_prompt_for_length(
+    length: str,
+    summary_config: SummaryConfig | None = None,
+) -> str:
     """要約長に対応するプロンプトを取得する。
+
+    SummaryConfigが渡された場合、カスタムプロンプトやextra_instructionsを
+    反映する。未指定ならデフォルトプロンプトを使用する。
 
     Args:
         length: 要約の長さ ("short", "standard", "detailed")
+        summary_config: 要約設定（カスタムプロンプト等）
 
     Returns:
         プロンプト文字列
@@ -46,7 +59,23 @@ def get_prompt_for_length(length: str) -> str:
             f"無効な要約長です: {length}"
             f"（有効な値: {', '.join(sorted(VALID_LENGTHS))}）"
         )
-    return SUMMARY_PROMPTS[length]
+
+    prompt = DEFAULT_PROMPTS[length]
+
+    if summary_config is not None:
+        custom_prompts = {
+            "short": summary_config.prompt_short,
+            "standard": summary_config.prompt_standard,
+            "detailed": summary_config.prompt_detailed,
+        }
+        custom = custom_prompts[length]
+        if custom:
+            prompt = custom
+
+        if summary_config.extra_instructions:
+            prompt = f"{prompt}\n\n{summary_config.extra_instructions}"
+
+    return prompt
 
 
 class SummarizerEngine(ABC):

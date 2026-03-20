@@ -1,5 +1,9 @@
 """Google Gemini APIを使用した要約エンジン"""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import httpx
 
 from pdfsum.engines.base import (
@@ -8,6 +12,9 @@ from pdfsum.engines.base import (
     retry_on_rate_limit,
 )
 from pdfsum.models.summary import SummarizationError
+
+if TYPE_CHECKING:
+    from pdfsum.config.manager import SummaryConfig
 
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
@@ -34,7 +41,12 @@ SUPPORTED_GEMINI_MODELS = frozenset(GEMINI_MODEL_SPECS.keys())
 class GeminiSummarizer(SummarizerEngine):
     """Google Gemini APIを使用した要約エンジン"""
 
-    def __init__(self, api_key: str, model: str = DEFAULT_GEMINI_MODEL) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        model: str = DEFAULT_GEMINI_MODEL,
+        summary_config: SummaryConfig | None = None,
+    ) -> None:
         if model not in SUPPORTED_GEMINI_MODELS:
             raise SummarizationError(
                 f"未対応のGeminiモデルです: {model}"
@@ -43,6 +55,7 @@ class GeminiSummarizer(SummarizerEngine):
         self._api_key = api_key
         self._model = model
         self._specs = GEMINI_MODEL_SPECS[model]
+        self._summary_config = summary_config
 
     @retry_on_rate_limit
     def summarize(self, text: str, length: str) -> str:
@@ -58,7 +71,7 @@ class GeminiSummarizer(SummarizerEngine):
         Raises:
             SummarizationError: API通信エラーまたは要約生成失敗
         """
-        prompt = get_prompt_for_length(length)
+        prompt = get_prompt_for_length(length, self._summary_config)
         url = f"{GEMINI_API_URL}/{self._model}:generateContent"
 
         payload = {

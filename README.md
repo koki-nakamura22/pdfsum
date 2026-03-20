@@ -48,6 +48,17 @@ model = "gemini-2.5-flash"
 [summary]
 default_length = "standard"  # short | standard | detailed
 
+# 全プロンプト共通の追加指示（任意）
+# extra_instructions = "目次、謝辞、参考文献一覧は要約対象に含めないでください。"
+
+# 各段階のプロンプトを完全に上書き（任意。未指定ならデフォルト）
+# prompt_short = "..."
+# prompt_standard = """
+# 複数行のカスタムプロンプトも指定可能です。
+# TOML の三重引用符を使ってください。
+# """
+# prompt_detailed = "..."
+
 [database]
 path = "~/.local/share/pdfsum/summaries.db"
 ```

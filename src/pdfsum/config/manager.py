@@ -50,6 +50,10 @@ class SummaryConfig:
     """要約設定"""
 
     default_length: str = DEFAULT_SUMMARY_LENGTH
+    extra_instructions: str = ""
+    prompt_short: str = ""
+    prompt_standard: str = ""
+    prompt_detailed: str = ""
 
 
 @dataclass
@@ -148,6 +152,10 @@ class ConfigManager:
         provider_str = llm_data.get("provider", DEFAULT_PROVIDER)
         model_str = llm_data.get("model", DEFAULT_MODEL)
         length_str = summary_data.get("default_length", DEFAULT_SUMMARY_LENGTH)
+        extra_instructions = summary_data.get("extra_instructions", "")
+        prompt_short = summary_data.get("prompt_short", "")
+        prompt_standard = summary_data.get("prompt_standard", "")
+        prompt_detailed = summary_data.get("prompt_detailed", "")
         db_path_str = db_data.get("path", DEFAULT_DB_PATH)
 
         return Config(
@@ -158,6 +166,10 @@ class ConfigManager:
             ),
             summary=SummaryConfig(
                 default_length=str(length_str),
+                extra_instructions=str(extra_instructions),
+                prompt_short=str(prompt_short),
+                prompt_standard=str(prompt_standard),
+                prompt_detailed=str(prompt_detailed),
             ),
             database=DatabaseConfig(
                 path=str(db_path_str),

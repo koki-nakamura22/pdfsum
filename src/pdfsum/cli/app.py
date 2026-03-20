@@ -67,7 +67,7 @@ def _build_service_for_summarize() -> SummarizeService:
     config = config_manager.load()
     api_key = config_manager.get_api_key(config, config.llm.provider)
     engine = SummarizerFactory.create(
-        config.llm.provider, api_key, config.llm.model
+        config.llm.provider, api_key, config.llm.model, config.summary
     )
     extractor = PDFExtractor()
     repository = SQLiteSummaryRepository(config.database.path)

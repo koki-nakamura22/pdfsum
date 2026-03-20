@@ -112,6 +112,60 @@ class TestConfigManagerLoad:
         assert config.llm.providers["claude"].api_key_env == "ANTHROPIC_API_KEY"
         assert config.llm.providers["openai"].api_key_env == "OPENAI_API_KEY"
 
+    def test_load_default_summary_prompt_fields(
+        self, tmp_path: Path, empty_env: str
+    ) -> None:
+        """デフォルトではプロンプト関連フィールドが空文字であること"""
+        manager = ConfigManager(
+            str(tmp_path / "nonexistent.toml"), env_path=empty_env
+        )
+        config = manager.load()
+
+        assert config.summary.extra_instructions == ""
+        assert config.summary.prompt_short == ""
+        assert config.summary.prompt_standard == ""
+        assert config.summary.prompt_detailed == ""
+
+    def test_load_reads_custom_prompt_config(
+        self, tmp_path: Path, empty_env: str
+    ) -> None:
+        """カスタムプロンプト設定を読み込めること"""
+        config_path = tmp_path / "config.toml"
+        config_path.write_text(
+            '[summary]\n'
+            'extra_instructions = "目次は除外してください。"\n'
+            'prompt_short = "短く要約して。"\n'
+            'prompt_standard = "標準的に要約して。"\n'
+            'prompt_detailed = "詳細に要約して。"\n'
+        )
+
+        manager = ConfigManager(str(config_path), env_path=empty_env)
+        config = manager.load()
+
+        assert config.summary.extra_instructions == "目次は除外してください。"
+        assert config.summary.prompt_short == "短く要約して。"
+        assert config.summary.prompt_standard == "標準的に要約して。"
+        assert config.summary.prompt_detailed == "詳細に要約して。"
+
+    def test_load_reads_multiline_prompt(
+        self, tmp_path: Path, empty_env: str
+    ) -> None:
+        """TOML三重引用符の複数行プロンプトを読み込めること"""
+        config_path = tmp_path / "config.toml"
+        config_path.write_text(
+            '[summary]\n'
+            'prompt_standard = """\n'
+            '以下のテキストを要約してください。\n'
+            '箇条書きで整理すること。\n'
+            '"""\n'
+        )
+
+        manager = ConfigManager(str(config_path), env_path=empty_env)
+        config = manager.load()
+
+        assert "以下のテキストを要約してください。" in config.summary.prompt_standard
+        assert "箇条書きで整理すること。" in config.summary.prompt_standard
+
 
 class TestConfigManagerLoadTypeGuards:
     """ConfigManager.load() の型ガード分岐テスト"""

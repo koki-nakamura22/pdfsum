@@ -1,5 +1,9 @@
 """OpenAI APIを使用した要約エンジン"""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import httpx
 
 from pdfsum.engines.base import (
@@ -8,6 +12,9 @@ from pdfsum.engines.base import (
     retry_on_rate_limit,
 )
 from pdfsum.models.summary import SummarizationError
+
+if TYPE_CHECKING:
+    from pdfsum.config.manager import SummaryConfig
 
 OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 DEFAULT_OPENAI_MODEL = "gpt-4.1-mini"
@@ -46,7 +53,12 @@ SUPPORTED_OPENAI_MODELS = frozenset(OPENAI_MODEL_SPECS.keys())
 class OpenAISummarizer(SummarizerEngine):
     """OpenAI APIを使用した要約エンジン"""
 
-    def __init__(self, api_key: str, model: str = DEFAULT_OPENAI_MODEL) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        model: str = DEFAULT_OPENAI_MODEL,
+        summary_config: SummaryConfig | None = None,
+    ) -> None:
         if model not in SUPPORTED_OPENAI_MODELS:
             raise SummarizationError(
                 f"未対応のOpenAIモデルです: {model}"
@@ -55,6 +67,7 @@ class OpenAISummarizer(SummarizerEngine):
         self._api_key = api_key
         self._model = model
         self._specs = OPENAI_MODEL_SPECS[model]
+        self._summary_config = summary_config
 
     @retry_on_rate_limit
     def summarize(self, text: str, length: str) -> str:
@@ -70,7 +83,7 @@ class OpenAISummarizer(SummarizerEngine):
         Raises:
             SummarizationError: API通信エラーまたは要約生成失敗
         """
-        prompt = get_prompt_for_length(length)
+        prompt = get_prompt_for_length(length, self._summary_config)
 
         payload = {
             "model": self._model,
