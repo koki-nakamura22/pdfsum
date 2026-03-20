@@ -1,9 +1,13 @@
 """PDFファイルからのテキスト抽出"""
 
 import hashlib
+from io import BytesIO
 from pathlib import Path
 
-import pymupdf
+from pdfminer.high_level import extract_text
+from pdfminer.pdfdocument import PDFPasswordIncorrect
+from pdfminer.pdfpage import PDFPage
+from pdfminer.pdfparser import PDFSyntaxError
 
 from pdfsum.models.summary import ExtractedDocument, ExtractedPage, ExtractionError
 
@@ -35,28 +39,32 @@ class PDFExtractor:
             raise ExtractionError(f"PDF以外のファイルです: {path.suffix}")
 
         try:
-            doc = pymupdf.open(str(path))
-        except Exception as e:
+            pdf_bytes = path.read_bytes()
+        except OSError as e:
             raise ExtractionError(
                 "PDFの読み取りに失敗しました。ファイルが破損しているか、"
                 "パスワード保護されている可能性があります"
             ) from e
 
-        if doc.needs_pass:
-            doc.close()
+        try:
+            page_list = list(
+                PDFPage.get_pages(BytesIO(pdf_bytes), check_extractable=False)
+            )
+        except PDFPasswordIncorrect as e:
             raise ExtractionError(
                 "PDFの読み取りに失敗しました。ファイルが破損しているか、"
                 "パスワード保護されている可能性があります"
-            )
+            ) from e
+        except (PDFSyntaxError, Exception) as e:
+            raise ExtractionError(
+                "PDFの読み取りに失敗しました。ファイルが破損しているか、"
+                "パスワード保護されている可能性があります"
+            ) from e
 
         pages: list[ExtractedPage] = []
-        try:
-            for i in range(len(doc)):
-                page = doc[i]
-                text = page.get_text()  # type: ignore[attr-defined]
-                pages.append(ExtractedPage(page_number=i + 1, text=text))
-        finally:
-            doc.close()
+        for i in range(len(page_list)):
+            text = extract_text(BytesIO(pdf_bytes), page_numbers=[i])
+            pages.append(ExtractedPage(page_number=i + 1, text=text))
 
         total_text = "\n".join(p.text for p in pages)
 

@@ -1,9 +1,10 @@
 """PDFExtractor のユニットテスト"""
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
+from pdfminer.pdfdocument import PDFPasswordIncorrect
 
 from pdfsum.extractors.pdf_extractor import PDFExtractor
 from pdfsum.models.summary import ExtractionError
@@ -104,12 +105,9 @@ class TestPDFExtractorExtract:
         self, sample_pdf_en: Path
     ) -> None:
         """パスワード保護されたPDFでExtractionErrorが発生する"""
-        mock_doc = MagicMock()
-        mock_doc.needs_pass = True
-
         with patch(
-            "pdfsum.extractors.pdf_extractor.pymupdf.open",
-            return_value=mock_doc,
+            "pdfsum.extractors.pdf_extractor.PDFPage.get_pages",
+            side_effect=PDFPasswordIncorrect,
         ):
             with pytest.raises(
                 ExtractionError, match="パスワード保護されている可能性があります"
