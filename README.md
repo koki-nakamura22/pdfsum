@@ -87,8 +87,8 @@ pdfsum delete <summary-id>
 | プロバイダ | デフォルトモデル | コンテキスト上限 |
 |-----------|-----------------|----------------|
 | Gemini    | gemini-2.5-flash | 1,000,000 tokens |
-| Claude    | claude-3.5-sonnet | 200,000 tokens |
-| OpenAI    | gpt-4o-mini | 128,000 tokens |
+| Claude    | claude-sonnet-4-6 | 1,000,000 tokens |
+| OpenAI    | gpt-4.1-mini | 1,000,000 tokens |
 
 ## 開発
 

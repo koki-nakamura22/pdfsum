@@ -21,17 +21,17 @@ class TestSummarizerFactory:
 
     def test_create_claude_returns_claude_summarizer(self) -> None:
         """claudeプロバイダでClaudeSummarizerを返す"""
-        engine = SummarizerFactory.create("claude", "key", "claude-haiku-4-5-20251001")
+        engine = SummarizerFactory.create("claude", "key", "claude-sonnet-4-6")
 
         assert isinstance(engine, ClaudeSummarizer)
-        assert engine.get_model_name() == "claude-haiku-4-5-20251001"
+        assert engine.get_model_name() == "claude-sonnet-4-6"
 
     def test_create_openai_returns_openai_summarizer(self) -> None:
         """openaiプロバイダでOpenAISummarizerを返す"""
-        engine = SummarizerFactory.create("openai", "key", "gpt-4o-mini")
+        engine = SummarizerFactory.create("openai", "key", "gpt-4.1-mini")
 
         assert isinstance(engine, OpenAISummarizer)
-        assert engine.get_model_name() == "gpt-4o-mini"
+        assert engine.get_model_name() == "gpt-4.1-mini"
 
     def test_create_unknown_provider_raises_config_error(self) -> None:
         """未対応プロバイダでConfigErrorを送出する"""

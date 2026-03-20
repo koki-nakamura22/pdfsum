@@ -10,8 +10,8 @@ from pdfsum.engines.base import (
 from pdfsum.models.summary import SummarizationError
 
 OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
-DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
-OPENAI_MAX_INPUT_TOKENS = 128_000
+DEFAULT_OPENAI_MODEL = "gpt-4.1-mini"
+OPENAI_MAX_INPUT_TOKENS = 1_000_000
 OPENAI_TIMEOUT_SECONDS = 120
 
 

@@ -37,7 +37,7 @@ class TestConfigManagerLoad:
         config_path.write_text(
             '[llm]\n'
             'provider = "claude"\n'
-            'model = "claude-haiku-4-5-20251001"\n'
+            'model = "claude-sonnet-4-6"\n'
             "\n"
             "[llm.claude]\n"
             'api_key_env = "MY_CLAUDE_KEY"\n'
@@ -53,7 +53,7 @@ class TestConfigManagerLoad:
         config = manager.load()
 
         assert config.llm.provider == "claude"
-        assert config.llm.model == "claude-haiku-4-5-20251001"
+        assert config.llm.model == "claude-sonnet-4-6"
         assert config.llm.providers["claude"].api_key_env == "MY_CLAUDE_KEY"
         assert config.summary.default_length == "detailed"
         assert config.database.path == "/custom/path/db.sqlite"

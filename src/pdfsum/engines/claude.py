@@ -10,8 +10,8 @@ from pdfsum.engines.base import (
 from pdfsum.models.summary import SummarizationError
 
 CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
-DEFAULT_CLAUDE_MODEL = "claude-haiku-4-5-20251001"
-CLAUDE_MAX_INPUT_TOKENS = 200_000
+DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6"
+CLAUDE_MAX_INPUT_TOKENS = 1_000_000
 CLAUDE_TIMEOUT_SECONDS = 120
 CLAUDE_API_VERSION = "2023-06-01"
 CLAUDE_MAX_OUTPUT_TOKENS = 8192
