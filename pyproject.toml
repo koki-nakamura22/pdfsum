@@ -9,6 +9,7 @@ dependencies = [
     "httpx>=0.27,<1.0",
     "tomli-w>=1.0",
     "python-dotenv>=1.2.1",
+    "platformdirs>=4.0",
 ]
 
 [project.scripts]

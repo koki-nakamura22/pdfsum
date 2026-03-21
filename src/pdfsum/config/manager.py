@@ -6,11 +6,19 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from dotenv import load_dotenv
+from platformdirs import user_config_dir, user_data_dir
 
 from pdfsum.models.summary import ConfigError
 
-DEFAULT_CONFIG_PATH = "~/.config/pdfsum/config.toml"
-DEFAULT_DB_PATH = "~/.local/share/pdfsum/summaries.db"
+
+def get_default_config_path() -> str:
+    """OS に適したデフォルト設定ファイルパスを返す"""
+    return str(Path(user_config_dir("pdfsum")) / "config.toml")
+
+
+def get_default_db_path() -> str:
+    """OS に適したデフォルトデータベースパスを返す"""
+    return str(Path(user_data_dir("pdfsum", roaming=True)) / "summaries.db")
 DEFAULT_PROVIDER = "gemini"
 DEFAULT_MODEL = "gemini-2.5-flash"
 DEFAULT_SUMMARY_LENGTH = "standard"
@@ -60,10 +68,13 @@ class SummaryConfig:
 class DatabaseConfig:
     """データベース設定"""
 
-    path: str = DEFAULT_DB_PATH
+    path: str = ""
 
     def __post_init__(self) -> None:
-        self.path = str(Path(self.path).expanduser())
+        if not self.path:
+            self.path = get_default_db_path()
+        else:
+            self.path = str(Path(self.path).expanduser())
 
 
 @dataclass
@@ -84,7 +95,7 @@ class ConfigManager:
         env_path: str | None = None,
     ) -> None:
         resolved = config_path or os.environ.get(
-            "PDFSUM_CONFIG_PATH", DEFAULT_CONFIG_PATH
+            "PDFSUM_CONFIG_PATH", get_default_config_path()
         )
         self._config_path = Path(resolved).expanduser()
         resolved_env = env_path or os.environ.get("PDFSUM_ENV_PATH")
@@ -156,7 +167,7 @@ class ConfigManager:
         prompt_short = summary_data.get("prompt_short", "")
         prompt_standard = summary_data.get("prompt_standard", "")
         prompt_detailed = summary_data.get("prompt_detailed", "")
-        db_path_str = db_data.get("path", DEFAULT_DB_PATH)
+        db_path_str = db_data.get("path", "")
 
         return Config(
             llm=LLMConfig(

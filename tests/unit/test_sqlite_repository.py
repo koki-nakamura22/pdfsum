@@ -4,6 +4,7 @@ import os
 import sqlite3
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -194,6 +195,28 @@ class TestSQLiteSummaryRepository:
         stat = os.stat(db_path)
         assert stat.st_mode & 0o777 == 0o600
         repo.close()
+
+    def test_init_skips_chmod_on_windows(
+        self, tmp_path: Path
+    ) -> None:
+        """Windows環境ではchmodがスキップされる"""
+        db_path = tmp_path / "win_test.db"
+        with patch("pdfsum.repositories.sqlite.os.chmod") as mock_chmod, \
+             patch("pdfsum.repositories.sqlite.sys.platform", "win32"):
+            repo = SQLiteSummaryRepository(str(db_path))
+            mock_chmod.assert_not_called()
+            repo.close()
+
+    def test_init_calls_chmod_on_posix(
+        self, tmp_path: Path
+    ) -> None:
+        """POSIX環境ではchmodが呼ばれる"""
+        db_path = tmp_path / "posix_test.db"
+        with patch("pdfsum.repositories.sqlite.os.chmod") as mock_chmod, \
+             patch("pdfsum.repositories.sqlite.sys.platform", "linux"):
+            repo = SQLiteSummaryRepository(str(db_path))
+            mock_chmod.assert_called_once_with(db_path, 0o600)
+            repo.close()
 
     @pytest.mark.parametrize("summary_length", ["short", "standard", "detailed"])
     def test_save_accepts_valid_summary_lengths(
