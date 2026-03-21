@@ -3,10 +3,17 @@
 import argparse
 import re
 import sys
+from pathlib import Path
 
 from pdfsum import __version__
 from pdfsum.cli import display
-from pdfsum.config.manager import ConfigManager
+from pdfsum.config.manager import (
+    DEFAULT_CONFIG_PATH,
+    DEFAULT_DB_PATH,
+    DEFAULT_PROVIDER,
+    DEFAULT_SUMMARY_LENGTH,
+    ConfigManager,
+)
 from pdfsum.engines.base import SummarizerEngine
 from pdfsum.engines.factory import SummarizerFactory
 from pdfsum.extractors.pdf_extractor import PDFExtractor
@@ -88,6 +95,107 @@ def _build_service_for_readonly() -> SummarizeService:
     return SummarizeService(extractor, engine, repository)
 
 
+_DEFAULT_MODELS: dict[str, str] = {
+    "gemini": "gemini-2.5-flash",
+    "claude": "claude-sonnet-4-6",
+    "openai": "gpt-4.1-mini",
+}
+
+_PROVIDERS = list(_DEFAULT_MODELS.keys())
+_LENGTHS = ["short", "standard", "detailed"]
+
+
+def _prompt_choice(
+    prompt: str,
+    choices: list[str],
+    default: str,
+) -> str:
+    """選択肢を対話的に入力させる。"""
+    choices_str = " / ".join(
+        f"[{c}]" if c == default else c for c in choices
+    )
+    while True:
+        value = input(f"{prompt} ({choices_str}): ").strip()
+        if not value:
+            return default
+        if value in choices:
+            return value
+        print(f"  → {', '.join(choices)} から選択してください。")
+
+
+def _prompt_text(prompt: str, default: str) -> str:
+    """テキストを対話的に入力させる。"""
+    value = input(f"{prompt} (デフォルト: {default}): ").strip()
+    return value if value else default
+
+
+def _confirm(prompt: str) -> bool:
+    """yes/no確認を対話的に行う。"""
+    value = input(f"{prompt} (y/N): ").strip().lower()
+    return value in ("y", "yes")
+
+
+def _generate_config_toml(
+    provider: str,
+    model: str,
+    length: str,
+    db_path: str,
+) -> str:
+    """config.tomlの内容を生成する。"""
+    return (
+        "[llm]\n"
+        f'provider = "{provider}"\n'
+        f'model = "{model}"\n'
+        "\n"
+        "[summary]\n"
+        f'default_length = "{length}"\n'
+        "\n"
+        "# 全プロンプト共通の追加指示（任意）\n"
+        '# extra_instructions = ""\n'
+        "\n"
+        "# 各段階のプロンプトを完全に上書き（任意）\n"
+        '# prompt_short = "..."\n'
+        '# prompt_standard = "..."\n'
+        '# prompt_detailed = "..."\n'
+        "\n"
+        "[database]\n"
+        f'path = "{db_path}"\n'
+    )
+
+
+def cmd_init(args: argparse.Namespace) -> int:
+    """config.toml 対話生成コマンド"""
+    config_path = Path(DEFAULT_CONFIG_PATH).expanduser()
+
+    if config_path.exists() and not _confirm(
+        f"{config_path} は既に存在します。上書きしますか？"
+    ):
+        print("中止しました。")
+        return 0
+
+    provider = _prompt_choice(
+        "LLMプロバイダー", _PROVIDERS, DEFAULT_PROVIDER
+    )
+    default_model = _DEFAULT_MODELS[provider]
+    model = _prompt_text("モデル名", default_model)
+    length = _prompt_choice(
+        "デフォルト要約長", _LENGTHS, DEFAULT_SUMMARY_LENGTH
+    )
+    db_path = _prompt_text("データベースパス", DEFAULT_DB_PATH)
+
+    content = _generate_config_toml(provider, model, length, db_path)
+
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(content, encoding="utf-8")
+
+    display.print_success(f"設定ファイルを作成しました: {config_path}")
+    print()
+    print("カスタムプロンプトや追加指示を設定する場合は、")
+    print(f"  {config_path}")
+    print("を直接編集してください。")
+    return 0
+
+
 def cmd_summarize(args: argparse.Namespace) -> int:
     """PDF要約コマンド"""
     display.print_progress(1, 3, "PDFテキスト抽出中...")
@@ -157,6 +265,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers(dest="command")
 
+    # init サブコマンド
+    subparsers.add_parser(
+        "init",
+        help="設定ファイル (config.toml) を対話的に生成する",
+    )
+
     # summarize サブコマンド
     summarize_parser = subparsers.add_parser(
         "summarize",
@@ -225,6 +339,7 @@ def main(args: list[str] | None = None) -> int:
         return 2
 
     commands = {
+        "init": cmd_init,
         "summarize": cmd_summarize,
         "list": cmd_list,
         "show": cmd_show,
