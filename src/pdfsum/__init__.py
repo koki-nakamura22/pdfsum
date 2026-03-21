@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from importlib.metadata import version as _pkg_version
 
 from pdfsum.models.summary import (
     ConfigError,
@@ -13,7 +14,7 @@ from pdfsum.models.summary import (
 )
 from pdfsum.services.summarize_service import SummarizeService
 
-__version__ = "0.1.0"
+__version__ = _pkg_version("pdfsum")
 
 __all__ = [
     "create_service",
