@@ -78,7 +78,7 @@ class TestCreateServiceWithProvider:
         call_args = mock_factory_create.call_args
         assert call_args[0][0] == "claude"
         assert call_args[0][1] == "my-key"
-        assert call_args[0][2] == "claude-sonnet-4-20250514"
+        assert call_args[0][2] is None  # エンジン側のデフォルトに委譲
 
     @patch("pdfsum.repositories.sqlite.SQLiteSummaryRepository")
     @patch("pdfsum.extractors.pdf_extractor.PDFExtractor")
@@ -122,41 +122,16 @@ class TestCreateServiceDefaultModel:
     @patch("pdfsum.repositories.sqlite.SQLiteSummaryRepository")
     @patch("pdfsum.extractors.pdf_extractor.PDFExtractor")
     @patch("pdfsum.engines.factory.SummarizerFactory.create")
-    def test_default_model_gemini(
+    def test_model_none_delegates_to_engine(
         self,
         mock_factory_create: MagicMock,
         mock_extractor_cls: MagicMock,
         mock_repo_cls: MagicMock,
     ) -> None:
+        """model未指定時はNoneをfactoryに渡し、エンジン側のデフォルトに委譲"""
         mock_factory_create.return_value = MagicMock()
         create_service(provider="gemini", api_key="key")
-        assert mock_factory_create.call_args[0][2] == "gemini-2.5-flash"
-
-    @patch("pdfsum.repositories.sqlite.SQLiteSummaryRepository")
-    @patch("pdfsum.extractors.pdf_extractor.PDFExtractor")
-    @patch("pdfsum.engines.factory.SummarizerFactory.create")
-    def test_default_model_claude(
-        self,
-        mock_factory_create: MagicMock,
-        mock_extractor_cls: MagicMock,
-        mock_repo_cls: MagicMock,
-    ) -> None:
-        mock_factory_create.return_value = MagicMock()
-        create_service(provider="claude", api_key="key")
-        assert mock_factory_create.call_args[0][2] == "claude-sonnet-4-20250514"
-
-    @patch("pdfsum.repositories.sqlite.SQLiteSummaryRepository")
-    @patch("pdfsum.extractors.pdf_extractor.PDFExtractor")
-    @patch("pdfsum.engines.factory.SummarizerFactory.create")
-    def test_default_model_openai(
-        self,
-        mock_factory_create: MagicMock,
-        mock_extractor_cls: MagicMock,
-        mock_repo_cls: MagicMock,
-    ) -> None:
-        mock_factory_create.return_value = MagicMock()
-        create_service(provider="openai", api_key="key")
-        assert mock_factory_create.call_args[0][2] == "gpt-4o"
+        assert mock_factory_create.call_args[0][2] is None
 
     @patch("pdfsum.repositories.sqlite.SQLiteSummaryRepository")
     @patch("pdfsum.extractors.pdf_extractor.PDFExtractor")

@@ -55,7 +55,6 @@ def create_service(
     """
     from pdfsum.config.manager import (
         DEFAULT_DB_PATH,
-        DEFAULT_MODELS,
         DEFAULT_PROVIDER_CONFIGS,
         ConfigManager,
         SummaryConfig,
@@ -70,7 +69,7 @@ def create_service(
         config = config_manager.load()
         resolved_provider = config.llm.provider
         resolved_api_key = config_manager.get_api_key(config, resolved_provider)
-        resolved_model = model or config.llm.model
+        resolved_model: str | None = model or config.llm.model
         resolved_db_path = db_path or config.database.path
         summary_config = config.summary
         if extra_instructions is not None:
@@ -99,11 +98,7 @@ def create_service(
                     f"環境変数 {env_var} を設定するか、api_key引数を指定してください"
                 )
 
-        resolved_model = model or DEFAULT_MODELS.get(provider, "")
-        if not resolved_model:
-            raise ConfigError(
-                "モデルが指定されていません。model引数を指定してください"
-            )
+        resolved_model = model  # None時はエンジンのデフォルトに委譲
 
         from pathlib import Path
 
