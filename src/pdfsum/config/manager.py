@@ -21,6 +21,12 @@ DEFAULT_PROVIDER_CONFIGS: dict[str, str] = {
     "openai": "OPENAI_API_KEY",
 }
 
+DEFAULT_MODELS: dict[str, str] = {
+    "gemini": "gemini-2.5-flash",
+    "claude": "claude-sonnet-4-20250514",
+    "openai": "gpt-4o",
+}
+
 
 @dataclass
 class ProviderConfig:
