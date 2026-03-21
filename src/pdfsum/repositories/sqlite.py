@@ -2,6 +2,7 @@
 
 import os
 import sqlite3
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -64,9 +65,10 @@ class SQLiteSummaryRepository(SummaryRepository):
         path = Path(db_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         if not path.exists():
-            # ファイルを作成して権限設定
+            # ファイルを作成して権限設定（Windows では chmod 非対応のためスキップ）
             path.touch()
-            os.chmod(path, 0o600)
+            if sys.platform != "win32":
+                os.chmod(path, 0o600)
 
     def save(self, summary: Summary) -> None:
         """要約を保存する。

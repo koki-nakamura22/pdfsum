@@ -55,10 +55,10 @@ def create_service(
         ConfigError: 設定の読み込みやAPIキーの取得に失敗した場合
     """
     from pdfsum.config.manager import (
-        DEFAULT_DB_PATH,
         DEFAULT_PROVIDER_CONFIGS,
         ConfigManager,
         SummaryConfig,
+        get_default_db_path,
     )
     from pdfsum.engines.factory import SummarizerFactory
     from pdfsum.extractors.pdf_extractor import PDFExtractor
@@ -105,7 +105,7 @@ def create_service(
 
         resolved_db_path = (
             str(Path(db_path).expanduser()) if db_path else
-            str(Path(DEFAULT_DB_PATH).expanduser())
+            get_default_db_path()
         )
 
         summary_config = SummaryConfig(

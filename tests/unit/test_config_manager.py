@@ -6,12 +6,12 @@ from unittest.mock import patch
 import pytest
 
 from pdfsum.config.manager import (
-    DEFAULT_CONFIG_PATH,
-    DEFAULT_DB_PATH,
     DEFAULT_MODEL,
     DEFAULT_PROVIDER,
     DEFAULT_SUMMARY_LENGTH,
     ConfigManager,
+    get_default_config_path,
+    get_default_db_path,
 )
 from pdfsum.models.summary import ConfigError
 
@@ -40,7 +40,7 @@ class TestConfigManagerLoad:
         assert config.llm.provider == DEFAULT_PROVIDER
         assert config.llm.model == DEFAULT_MODEL
         assert config.summary.default_length == DEFAULT_SUMMARY_LENGTH
-        assert config.database.path == str(Path(DEFAULT_DB_PATH).expanduser())
+        assert config.database.path == get_default_db_path()
 
     def test_load_reads_toml_config(
         self, tmp_path: Path, empty_env: str
@@ -205,7 +205,7 @@ class TestConfigManagerLoadTypeGuards:
         manager = ConfigManager(str(config_path), env_path=empty_env)
         config = manager.load()
 
-        assert config.database.path == str(Path(DEFAULT_DB_PATH).expanduser())
+        assert config.database.path == get_default_db_path()
 
     def test_non_dict_provider_config_uses_default_env_var(
         self, tmp_path: Path, empty_env: str
@@ -320,7 +320,7 @@ class TestConfigManagerConfigPath:
         ):
             manager = ConfigManager(env_path=empty_env)
 
-        assert manager._config_path == Path(DEFAULT_CONFIG_PATH).expanduser()
+        assert manager._config_path == Path(get_default_config_path())
 
     def test_arg_takes_precedence_over_env_var(
         self, tmp_path: Path, empty_env: str
