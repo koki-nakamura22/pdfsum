@@ -111,11 +111,11 @@ def _prompt_choice(
     default: str,
 ) -> str:
     """選択肢を対話的に入力させる。"""
-    choices_str = " / ".join(
-        f"[{c}]" if c == default else c for c in choices
-    )
+    choices_str = " / ".join(choices)
     while True:
-        value = input(f"{prompt} ({choices_str}): ").strip()
+        value = input(
+            f"{prompt} ({choices_str}) (デフォルト: {default}): "
+        ).strip()
         if not value:
             return default
         if value in choices:
