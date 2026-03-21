@@ -93,6 +93,56 @@ pdfsum show <summary-id>  # 8文字のIDプレフィックスでもOK
 pdfsum delete <summary-id>
 ```
 
+## ライブラリとしての使用
+
+`pdfsum`はPythonコードからも利用できます。
+
+### 基本的な使い方
+
+```python
+from pdfsum import create_service
+
+# config.tomlの設定を使用
+service = create_service()
+summary = service.summarize("document.pdf", "standard")
+print(summary.summary_text)
+```
+
+### プロバイダとAPIキーを直接指定
+
+```python
+from pdfsum import create_service
+
+service = create_service(provider="gemini", api_key="your-api-key")
+summary = service.summarize("document.pdf", "detailed")
+```
+
+### 環境変数からAPIキーを取得
+
+```python
+import os
+os.environ["GEMINI_API_KEY"] = "your-api-key"
+
+from pdfsum import create_service
+
+# api_keyを省略すると環境変数から自動取得
+service = create_service(provider="gemini")
+```
+
+### オプション引数
+
+```python
+from pdfsum import create_service
+
+service = create_service(
+    provider="claude",
+    api_key="your-api-key",
+    model="claude-sonnet-4-20250514",       # モデル指定（省略時はプロバイダのデフォルト）
+    db_path="~/my-summaries.db",            # キャッシュDBのパス
+    extra_instructions="日本語で要約してください",  # 追加指示
+)
+```
+
 ## 対応モデル
 
 | プロバイダ | モデル | 入力上限 | 出力上限 | デフォルト |
