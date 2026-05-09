@@ -245,6 +245,8 @@ def test_summarize_file_uses_parent_dir_and_filename_glob(
         glob: str,
         db_path: Path,
         config: Config,
+        chunk_size: int | None = None,
+        chunk_overlap: int = 0,
     ) -> object:
         captured["source_path"] = source_path
         captured["glob"] = glob
@@ -307,6 +309,8 @@ def test_summarize_directory_uses_user_glob(
         glob: str,
         db_path: Path,
         config: Config,
+        chunk_size: int | None = None,
+        chunk_overlap: int = 0,
     ) -> object:
         captured["source_path"] = source_path
         captured["glob"] = glob

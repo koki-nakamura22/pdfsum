@@ -338,7 +338,7 @@ wheels = [
 [[package]]
 name = "digestkit"
 version = "0.1.0"
-source = { git = "https://github.com/koki-nakamura22/inboxkit.git?subdirectory=packages%2Fdigestkit&branch=feat%2Fissue-10-llmsummarizer-length#0a61d5e6616a12173c44f5ef9794e7b1ab8b34bc" }
+source = { git = "https://github.com/koki-nakamura22/inboxkit.git?subdirectory=packages%2Fdigestkit&branch=feat%2Fissue-11-chunked-summarizer#546535efc5476858f1b3efd8710a99218bf530ae" }
 dependencies = [
     { name = "litellm" },
     { name = "python-dotenv" },
@@ -1109,7 +1109,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "digestkit", extras = ["pdf"], git = "https://github.com/koki-nakamura22/inboxkit.git?subdirectory=packages%2Fdigestkit&branch=feat%2Fissue-10-llmsummarizer-length" },
+    { name = "digestkit", extras = ["pdf"], git = "https://github.com/koki-nakamura22/inboxkit.git?subdirectory=packages%2Fdigestkit&branch=feat%2Fissue-11-chunked-summarizer" },
     { name = "httpx", specifier = ">=0.27,<1.0" },
     { name = "platformdirs", specifier = ">=4.0" },
     { name = "pypdfium2", specifier = ">=4.0" },

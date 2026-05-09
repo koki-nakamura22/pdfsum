@@ -21,7 +21,7 @@ from digestkit.dedup import default_seen_store_path
 from digestkit.extractors import PDFExtractor
 from digestkit.sinks import SQLiteSink
 from digestkit.sources import LocalDirectorySource
-from digestkit.summarizers import LLMSummarizer
+from digestkit.summarizers import ChunkedLLMSummarizer
 
 from pdfsum import __version__
 from pdfsum.cli import display
@@ -67,6 +67,8 @@ def _build_digester(
     glob: str,
     db_path: Path,
     config: Config,
+    chunk_size: int | None = None,
+    chunk_overlap: int = 0,
 ) -> Digester:
     """pdfsum 設定から digestkit Digester を組み立てる。"""
     provider = config.llm.provider
@@ -83,7 +85,7 @@ def _build_digester(
 
     # digestkit のビルトイン 3 段階プロンプトを opt-in. extra_instructions が
     # あれば全段階の先頭に prepend する.
-    base_prompts = LLMSummarizer.DEFAULT_PROMPTS
+    base_prompts = ChunkedLLMSummarizer.DEFAULT_PROMPTS
     if config.summary.extra_instructions:
         prefix = f"{config.summary.extra_instructions}\n\n"
         prompts = {key: prefix + tmpl for key, tmpl in base_prompts.items()}
@@ -92,12 +94,16 @@ def _build_digester(
 
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # 長文 PDF (論文 / 書籍章) はモデル上限を超えるため Chunked を使う.
+    # 上限内に収まる短文は ChunkedLLMSummarizer 内で単発呼び出しに自動 fallback する.
     class PdfsumDigester(Digester):
         source = LocalDirectorySource(source_path, glob=glob)
         extractor = PDFExtractor()
-        summarizer = LLMSummarizer(
+        summarizer = ChunkedLLMSummarizer(
             provider=litellm_provider,
             model=config.llm.model,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
             prompts=prompts,
             default_length=config.summary.default_length or "standard",
         )
@@ -214,7 +220,12 @@ def cmd_summarize(args: argparse.Namespace) -> int:
     config = ConfigManager().load()
     db_path = _resolve_db_path(config, args.db_path)
     digester = _build_digester(
-        source_dir, glob=glob, db_path=db_path, config=config
+        source_dir,
+        glob=glob,
+        db_path=db_path,
+        config=config,
+        chunk_size=args.chunk_size,
+        chunk_overlap=args.chunk_overlap,
     )
     result = digester.run(
         limit=args.limit, dry_run=args.dry_run, length=args.length
@@ -311,6 +322,19 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=["short", "standard", "detailed"],
         default=None,
         help="要約の長さ (未指定時は config.toml の summary.default_length)",
+    )
+    summarize_parser.add_argument(
+        "--chunk-size",
+        type=int,
+        default=None,
+        help="ChunkedLLMSummarizer の chunk_size (tokens). "
+        "未指定時はモデル上限から自動算出",
+    )
+    summarize_parser.add_argument(
+        "--chunk-overlap",
+        type=int,
+        default=0,
+        help="ChunkedLLMSummarizer の chunk_overlap (tokens, デフォルト 0)",
     )
     _add_db_path_arg(summarize_parser)
 

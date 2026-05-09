@@ -60,7 +60,18 @@ def _run_with_mocked_llm(
     if length is not None:
         args.extend(["--length", length])
 
-    with patch("digestkit.summarizers.llm.litellm.completion", side_effect=fake_completion):
+    # PR #17 で pdfsum は ChunkedLLMSummarizer に切り替え済み. 短文は単発 fallback
+    # に入るため、token_counter を小さい値で固定して fallback 経路に乗せる.
+    with (
+        patch(
+            "digestkit.summarizers.chunked.litellm.completion",
+            side_effect=fake_completion,
+        ),
+        patch(
+            "digestkit.summarizers.chunked.litellm.token_counter",
+            return_value=10,
+        ),
+    ):
         rc = main(args)
     assert rc == 0, f"summarize 失敗: rc={rc}"
 

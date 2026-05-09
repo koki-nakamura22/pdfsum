@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-digestkit = { git = "https://github.com/koki-nakamura22/inboxkit.git", subdirectory = "packages/digestkit", branch = "feat/issue-10-llmsummarizer-length" }
+digestkit = { git = "https://github.com/koki-nakamura22/inboxkit.git", subdirectory = "packages/digestkit", branch = "feat/issue-11-chunked-summarizer" }
 
 [project.scripts]
 pdfsum = "pdfsum.cli.app:main"
