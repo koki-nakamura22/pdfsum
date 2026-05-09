@@ -15,26 +15,21 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-# NOTE (dogfooding findings vs digestkit 0.1.0):
-# 1. README が示す `from digestkit import Digester` /
-#    `from digestkit.sinks import SQLiteSink` /
-#    `from digestkit.summarizers import LLMSummarizer` が動かない
-#    (パッケージ/サブパッケージ ``__init__.py`` で re-export されていない)。
-# 2. `from digestkit.sources import LocalDirectorySource` も `__init__.py` が
-#    `NotionDatabaseSource` を eager import するため `notion` extra 未インストール時に
-#    失敗する (digestkit 0.1.0)。
-# 暫定として実モジュールから直接 import する。upstream で整備されたら戻す。
-from digestkit.digester import Digester
+# NOTE: digestkit 0.1.0 は `digestkit.sources.__init__` で `NotionDatabaseSource`
+# を eager import するため、`notion` extra を必ずインストールする必要がある
+# (本リポジトリの pyproject.toml で `digestkit[pdf,notion]` 指定済み)。
+# upstream で sources の lazy import が整備されたら notion extra は外せる。
+from digestkit import Digester
 from digestkit.extractors import PDFExtractor as DigestKitPDFExtractor
-from digestkit.sinks.sqlite import SQLiteSink
-from digestkit.sources.local_directory import LocalDirectorySource
-from digestkit.summarizers.llm import LLMSummarizer
+from digestkit.sinks import SQLiteSink
+from digestkit.sources import LocalDirectorySource
+from digestkit.summarizers import LLMSummarizer
 
 from pdfsum.config.manager import Config, ConfigManager
 from pdfsum.models.summary import ConfigError
 
 if TYPE_CHECKING:
-    from digestkit.digester import RunResult
+    from digestkit import RunResult
 
 # pdfsumのprovider名 → litellmのprovider名
 _PROVIDER_TO_LITELLM: dict[str, str] = {
