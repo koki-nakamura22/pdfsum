@@ -253,10 +253,15 @@ def test_summarize_file_uses_parent_dir_and_filename_glob(
 
         class DummyDigester:
             def run(
-                self, limit: int | None = None, dry_run: bool = False
+                self,
+                limit: int | None = None,
+                dry_run: bool = False,
+                *,
+                length: str | None = None,
             ) -> object:
                 captured["limit"] = limit
                 captured["dry_run"] = dry_run
+                captured["length"] = length
                 return SimpleNamespace(success=1, skipped=0, failures=[])
 
         return DummyDigester()
@@ -308,7 +313,11 @@ def test_summarize_directory_uses_user_glob(
 
         class DummyDigester:
             def run(
-                self, limit: int | None = None, dry_run: bool = False
+                self,
+                limit: int | None = None,
+                dry_run: bool = False,
+                *,
+                length: str | None = None,
             ) -> object:
                 return SimpleNamespace(success=0, skipped=0, failures=[])
 

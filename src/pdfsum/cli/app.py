@@ -81,12 +81,14 @@ def _build_digester(
     # 解決したキーをその変数名へ正規化して流し込む。
     os.environ[_LITELLM_ENV_VAR[litellm_provider]] = api_key
 
-    user_prompt = _DEFAULT_PROMPT
+    # digestkit のビルトイン 3 段階プロンプトを opt-in. extra_instructions が
+    # あれば全段階の先頭に prepend する.
+    base_prompts = LLMSummarizer.DEFAULT_PROMPTS
     if config.summary.extra_instructions:
-        user_prompt = (
-            f"{config.summary.extra_instructions}\n\n"
-            f"以下のドキュメントを日本語で簡潔に要約してください。\n\n{{text}}"
-        )
+        prefix = f"{config.summary.extra_instructions}\n\n"
+        prompts = {key: prefix + tmpl for key, tmpl in base_prompts.items()}
+    else:
+        prompts = dict(base_prompts)
 
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -96,7 +98,8 @@ def _build_digester(
         summarizer = LLMSummarizer(
             provider=litellm_provider,
             model=config.llm.model,
-            user_prompt_template=user_prompt,
+            prompts=prompts,
+            default_length=config.summary.default_length or "standard",
         )
         sink = SQLiteSink(db_path)
 
@@ -213,7 +216,9 @@ def cmd_summarize(args: argparse.Namespace) -> int:
     digester = _build_digester(
         source_dir, glob=glob, db_path=db_path, config=config
     )
-    result = digester.run(limit=args.limit, dry_run=args.dry_run)
+    result = digester.run(
+        limit=args.limit, dry_run=args.dry_run, length=args.length
+    )
     return _print_run_result(result)
 
 
@@ -300,6 +305,12 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         default=False,
         help="シンク書き込みをスキップする",
+    )
+    summarize_parser.add_argument(
+        "--length",
+        choices=["short", "standard", "detailed"],
+        default=None,
+        help="要約の長さ (未指定時は config.toml の summary.default_length)",
     )
     _add_db_path_arg(summarize_parser)
 
