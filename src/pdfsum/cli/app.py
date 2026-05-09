@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from digestkit import Digester
+from digestkit import Digester, Item, content_sha256_key
 from digestkit.dedup import default_seen_store_path
 from digestkit.extractors import PDFExtractor
 from digestkit.sinks import SQLiteSink
@@ -108,6 +108,10 @@ def _build_digester(
             default_length=config.summary.default_length or "standard",
         )
         sink = SQLiteSink(db_path)
+        # Issue #12 / inboxkit#21: PDF 内容の SHA-256 を dedup キーにする.
+        # 既定の Item.id (絶対パス) ベースだと、同一内容の別パスが再要約され、
+        # 同一パスの内容差し替え時に再要約されない. content_sha256_key は両方を解決.
+        dedup_key = staticmethod(content_sha256_key)
 
     return PdfsumDigester()
 
@@ -170,22 +174,38 @@ def _resolve_short_id(db_path: Path, short_id: str) -> dict[str, Any]:
 
 
 def _delete_seen_item(item_id: str) -> None:
+    """SeenStore から該当エントリを削除する.
+
+    PdfsumDigester は dedup キーに ``content_sha256_key`` を使うため、SeenStore に
+    格納されているのは ``sha256:<hex>`` であって ``item_id`` (絶対パス) ではない.
+    元ファイルが残っていれば再ハッシュして削除し、消えていれば path フォールバックで
+    旧形式 (path ベース) のキーも掃除する.
+    """
     seen_db_path = _seen_store_path()
     if not seen_db_path.exists():
         return
 
+    candidate_keys: list[str] = [item_id]  # 旧 path ベース key の掃除も兼ねる
+    pdf_path = Path(item_id)
+    if pdf_path.is_file():
+        try:
+            sha_key = content_sha256_key(Item(id=item_id, payload=pdf_path))
+            candidate_keys.append(sha_key)
+        except OSError:
+            # 読めなければ skip (path ベース掃除のみ実施)
+            pass
+
     conn = sqlite3.connect(seen_db_path)
     try:
         with conn:
+            placeholders = ",".join("?" for _ in candidate_keys)
             conn.execute(
-                "DELETE FROM seen_items WHERE item_id = ?",
-                (item_id,),
+                f"DELETE FROM seen_items WHERE item_id IN ({placeholders})",
+                tuple(candidate_keys),
             )
     except sqlite3.OperationalError as exc:
         if "no such table: seen_items" not in str(exc):
-            raise PdfsumError(
-                f"SeenStore の更新に失敗しました: {exc}"
-            ) from exc
+            raise PdfsumError(f"SeenStore の更新に失敗しました: {exc}") from exc
     except sqlite3.Error as exc:
         raise PdfsumError(f"SeenStore の更新に失敗しました: {exc}") from exc
     finally:
@@ -198,9 +218,7 @@ def _print_run_result(result: RunResult) -> int:
         f"failures={len(result.failures)}"
     )
     for failure in result.failures:
-        display.print_error(
-            f"  - {failure.item.id} [{failure.stage}]: {failure.error}"
-        )
+        display.print_error(f"  - {failure.item.id} [{failure.stage}]: {failure.error}")
     return 0 if not result.failures else 1
 
 
@@ -227,9 +245,7 @@ def cmd_summarize(args: argparse.Namespace) -> int:
         chunk_size=args.chunk_size,
         chunk_overlap=args.chunk_overlap,
     )
-    result = digester.run(
-        limit=args.limit, dry_run=args.dry_run, length=args.length
-    )
+    result = digester.run(limit=args.limit, dry_run=args.dry_run, length=args.length)
     return _print_run_result(result)
 
 
@@ -259,9 +275,7 @@ def cmd_delete(args: argparse.Namespace) -> int:
     conn = sqlite3.connect(db_path)
     try:
         with conn:
-            conn.execute(
-                "DELETE FROM digests WHERE item_id = ?", (row["item_id"],)
-            )
+            conn.execute("DELETE FROM digests WHERE item_id = ?", (row["item_id"],))
     except sqlite3.Error as exc:
         raise PdfsumError(f"SQLite 書き込みに失敗しました: {exc}") from exc
     finally:

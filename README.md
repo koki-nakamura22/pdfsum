@@ -7,10 +7,6 @@ PDFドキュメントをLLM APIで要約するCLIツール。
 > これに伴い旧バージョンが備えていた以下の機能は **digestkit Phase 1 のスコープ外**として一旦落ちています:
 >
 > - 要約の長さ指定 (`--length short/standard/detailed`)
-> - PDF SHA-256 ハッシュによるキャッシュ (同一ファイルの再処理スキップ)
->   - 注: digestkit の `SeenStore` も dedup を提供しますが、判定キーは **`Item.id` = 絶対パス** です。
->     つまり同じパスのファイルを内容差し替えしても再要約されない / パスが違えば中身が同じでも再要約される
->     という挙動になり、旧版のハッシュベースキャッシュとは意味が異なります。
 > - 大規模 PDF のチャンク再帰要約 (digestkit `LLMSummarizer` は単発呼び出し)
 > - pdfsum 独自スキーマ + プログラム的公開 API (`pdfsum.create_service` / `SummarizeService`)
 >
@@ -22,7 +18,8 @@ PDFドキュメントをLLM APIで要約するCLIツール。
 - **複数 LLM 対応** — Google Gemini / Claude / OpenAI を `config.toml` で切り替え (digestkit 経由 = LiteLLM)
 - **ディレクトリ一括 / 単一ファイル両対応** — `summarize <path>` でファイル指定もディレクトリ指定もOK
 - **SQLite で永続化** — digestkit `SQLiteSink` の `digests` テーブルに要約を保存・一覧・表示・削除
-- **`SeenStore` による重複処理スキップ** — digestkit 標準の dedup が自動で有効
+- **PDF 内容ハッシュによる重複処理スキップ** — digestkit `SeenStore` + `content_sha256_key` で
+  同一内容の別パスファイルや、同一パスの内容差し替えにも追随する dedup を有効化
 
 ## 必要環境
 
