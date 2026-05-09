@@ -13,7 +13,7 @@ from pdfsum.config.manager import (
     get_default_config_path,
     get_default_db_path,
 )
-from pdfsum.models.summary import ConfigError
+from pdfsum.errors import ConfigError
 
 
 @pytest.fixture

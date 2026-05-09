@@ -2,13 +2,24 @@
 
 PDFドキュメントをLLM APIで要約するCLIツール。
 
-## 特徴
+> **2026-05-09 大幅リアーキ**: pdfsum を [digestkit](https://github.com/koki-nakamura22/inboxkit/tree/main/packages/digestkit) ベースで再実装しました
+> ([motif-3 ideas docs](https://github.com/koki-nakamura22/) Phase 1 工程「pdfsum を digestkit ベースで再実装」相当)。
+> これに伴い旧バージョンが備えていた以下の機能は **digestkit Phase 1 のスコープ外**として一旦落ちています:
+>
+> - 要約の長さ指定 (`--length short/standard/detailed`)
+> - PDF SHA-256 ハッシュによるキャッシュ (同一ファイルの再処理スキップ)
+> - 大規模 PDF のチャンク再帰要約 (digestkit `LLMSummarizer` は単発呼び出し)
+> - pdfsum 独自スキーマ + プログラム的公開 API (`pdfsum.create_service` / `SummarizeService`)
+>
+> これらは digestkit 側の機能ギャップとしてドッグフーディング所見にまとめ、必要なものは
+> 順次 digestkit に持ち上げる予定です。
 
-- **複数LLM対応** - Google Gemini / Claude / OpenAI を切り替え可能
-- **大規模PDF対応** - トークン上限を超えるPDFはチャンク分割して再帰的に要約
-- **キャッシュ** - PDFのSHA-256ハッシュで同一ファイルの再処理をスキップ
-- **要約の長さ指定** - short / standard / detailed の3段階
-- **SQLiteで永続化** - 要約結果の保存・一覧・表示・削除
+## 特徴 (digestkit ベース)
+
+- **複数 LLM 対応** — Google Gemini / Claude / OpenAI を `config.toml` で切り替え (digestkit 経由 = LiteLLM)
+- **ディレクトリ一括 / 単一ファイル両対応** — `summarize <path>` でファイル指定もディレクトリ指定もOK
+- **SQLite で永続化** — digestkit `SQLiteSink` の `digests` テーブルに要約を保存・一覧・表示・削除
+- **`SeenStore` による重複処理スキップ** — digestkit 標準の dedup が自動で有効
 
 ## 必要環境
 
@@ -23,6 +34,9 @@ cd pdfsum
 uv sync
 ```
 
+`digestkit` は inboxkit の `main` ブランチを git URL で取得します
+(`pyproject.toml` の `[tool.uv.sources]` 参照)。
+
 ## セットアップ
 
 ### APIキーの設定
@@ -30,7 +44,6 @@ uv sync
 プロジェクトルートに `.env` ファイルを作成し、使用するプロバイダのAPIキーを設定します。
 
 ```bash
-# 使用するプロバイダのキーを設定
 GEMINI_API_KEY=your-api-key
 ANTHROPIC_API_KEY=your-api-key
 OPENAI_API_KEY=your-api-key
@@ -46,148 +59,67 @@ provider = "gemini"          # gemini | claude | openai
 model = "gemini-2.5-flash"
 
 [summary]
-default_length = "standard"  # short | standard | detailed
-
-# 全プロンプト共通の追加指示（任意）
+# プロンプトへ追記する追加指示 (任意)
 # extra_instructions = "目次、謝辞、参考文献一覧は要約対象に含めないでください。"
-
-# 各段階のプロンプトを完全に上書き（任意。未指定ならデフォルト）
-# prompt_short = "..."
-# prompt_standard = """
-# 複数行のカスタムプロンプトも指定可能です。
-# TOML の三重引用符を使ってください。
-# """
-# prompt_detailed = "..."
 
 [database]
 path = "~/.local/share/pdfsum/summaries.db"
 ```
 
-設定ファイルがない場合は上記のデフォルト値が使われます。
+> 注: 旧バージョンの `summary.default_length` / `summary.prompt_short` 等は本実装では
+> 参照されません (digestkit `LLMSummarizer` の prompt template に統合)。
 
 ## 使い方
 
-### PDFを要約する
+### PDF を要約する
 
 ```bash
+# 単一 PDF
 pdfsum summarize document.pdf
-pdfsum summarize document.pdf --length detailed
+
+# ディレクトリ配下を一括
+pdfsum summarize ./papers
+pdfsum summarize ./papers --glob "*.pdf" --limit 10
+pdfsum summarize ./papers --dry-run    # シンク書き込みをスキップ
+pdfsum summarize ./papers --db-path ./digests.db
 ```
 
 ### 保存済みの要約を一覧表示
 
 ```bash
 pdfsum list
-pdfsum list --full-id  # 完全なUUIDを表示
+pdfsum list --full-id   # item_id (絶対パス) を完全表示
 ```
 
 ### 要約の詳細を表示
 
 ```bash
-pdfsum show <summary-id>  # 8文字のIDプレフィックスでもOK
+# item_id (絶対パス) のパス末尾またはファイル名の部分一致で指定
+pdfsum show document
+pdfsum show /abs/path/to/document.pdf
 ```
 
 ### 要約を削除
 
 ```bash
-pdfsum delete <summary-id>
-```
-
-### ディレクトリ配下のPDFを一括要約 (digestkit ベース)
-
-`pdfsum digest` は [digestkit](https://github.com/koki-nakamura22/inboxkit/tree/main/packages/digestkit)
-の `Source → Extractor → Summarizer → Sink` パイプラインを利用してディレクトリ配下の
-PDF を一括要約するサブコマンドです（ドッグフーディング目的で追加）。
-
-```bash
-pdfsum digest ./papers
-pdfsum digest ./papers --glob "*.pdf" --db-path ./digests.db --limit 10
-pdfsum digest ./papers --dry-run
-```
-
-設定 (provider / model / APIキー) は既存の `config.toml` と環境変数を流用します。
-出力先 SQLite には `digestkit` 互換のスキーマで要約が書き込まれ、`SeenStore` による
-重複処理スキップも自動で有効になります。
-
-## ライブラリとしての使用
-
-`pdfsum`はPythonコードからも利用できます。
-
-### 基本的な使い方
-
-```python
-from pdfsum import create_service
-
-# config.tomlの設定を使用
-service = create_service()
-summary = service.summarize("document.pdf", "standard")
-print(summary.summary_text)
-```
-
-### プロバイダとAPIキーを直接指定
-
-```python
-from pdfsum import create_service
-
-service = create_service(provider="gemini", api_key="your-api-key")
-summary = service.summarize("document.pdf", "detailed")
-```
-
-### 環境変数からAPIキーを取得
-
-```python
-import os
-os.environ["GEMINI_API_KEY"] = "your-api-key"
-
-from pdfsum import create_service
-
-# api_keyを省略すると環境変数から自動取得
-service = create_service(provider="gemini")
-```
-
-### オプション引数
-
-```python
-from pdfsum import create_service
-
-service = create_service(
-    provider="claude",
-    api_key="your-api-key",
-    model="claude-sonnet-4-20250514",       # モデル指定（省略時はプロバイダのデフォルト）
-    db_path="~/my-summaries.db",            # キャッシュDBのパス
-    extra_instructions="日本語で要約してください",  # 追加指示
-)
+pdfsum delete document
 ```
 
 ## 対応モデル
 
-| プロバイダ | モデル | 入力上限 | 出力上限 | デフォルト |
-|-----------|--------|---------|---------|-----------|
-| Gemini    | gemini-2.5-flash | 1,048,576 | 65,535 | ✅ |
-| Gemini    | gemini-2.5-flash-lite | 1,048,576 | 65,535 | |
-| Gemini    | gemini-2.5-pro | 1,048,576 | 65,535 | |
-| Claude    | claude-opus-4-6 | 1,000,000 | 128,000 | |
-| Claude    | claude-sonnet-4-6 | 1,000,000 | 64,000 | ✅ |
-| Claude    | claude-haiku-4-5-20251001 | 200,000 | 64,000 | |
-| OpenAI    | gpt-5.4 | 1,000,000 | 128,000 | |
-| OpenAI    | gpt-5.4-mini | 400,000 | 128,000 | |
-| OpenAI    | gpt-5.4-nano | 400,000 | 128,000 | |
-| OpenAI    | gpt-4.1 | 1,047,576 | 32,768 | |
-| OpenAI    | gpt-4.1-mini | 1,047,576 | 32,768 | ✅ |
-| OpenAI    | gpt-4.1-nano | 1,047,576 | 32,768 | |
+`config.toml` の `[llm].model` に文字列で指定。digestkit (LiteLLM) が対応するモデル ID
+であれば任意に指定可能です。代表例:
+
+| プロバイダ | モデル例 |
+|-----------|----------|
+| Gemini    | `gemini-2.5-flash` / `gemini-2.5-pro` |
+| Claude    | `claude-haiku-4-5` / `claude-sonnet-4-6` / `claude-opus-4-7` |
+| OpenAI    | `gpt-4.1` / `gpt-4.1-mini` / `gpt-5.4` |
 
 ## 開発
 
 ```bash
-# テスト
 uv run pytest
-
-# カバレッジ付きテスト
-uv run pytest --cov=pdfsum
-
-# リント
 uv run ruff check src/ tests/
-
-# 型チェック
 uv run mypy src/
 ```

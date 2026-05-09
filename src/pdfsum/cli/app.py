@@ -1,151 +1,153 @@
-"""argparse 定義・メインCLI"""
+"""argparse 定義・メインCLI (digestkit ベースの薄い再実装)。
+
+ideas docs (motif-3-llm-content-digest) の Phase 1 工程
+「既存 pdfsum を digestkit ベースで再実装」に従い、本モジュールは
+digestkit のパイプラインをそのまま叩く薄いラッパーになっている。
+保存先 SQLite のスキーマは digestkit ``SQLiteSink`` の ``digests`` テーブル
+(item_id / summary / tokens_in / tokens_out / latency_ms / model / created_at)。
+"""
+
+from __future__ import annotations
 
 import argparse
-import re
+import os
+import sqlite3
 import sys
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+from digestkit import Digester
+from digestkit.extractors import PDFExtractor
+from digestkit.sinks import SQLiteSink
+from digestkit.sources import LocalDirectorySource
+from digestkit.summarizers import LLMSummarizer
 
 from pdfsum import __version__
 from pdfsum.cli import display
-from pdfsum.config.manager import ConfigManager
-from pdfsum.engines.base import SummarizerEngine
-from pdfsum.engines.factory import SummarizerFactory
-from pdfsum.extractors.pdf_extractor import PDFExtractor
-from pdfsum.models.summary import PdfsumError
-from pdfsum.repositories.sqlite import SQLiteSummaryRepository
-from pdfsum.services.summarize_service import SummarizeService
+from pdfsum.config.manager import Config, ConfigManager
+from pdfsum.errors import ConfigError, PdfsumError
+
+if TYPE_CHECKING:
+    from digestkit import RunResult
+
+# pdfsum 設定の provider 名 → digestkit (litellm) の provider 名
+_PROVIDER_TO_LITELLM: dict[str, str] = {
+    "gemini": "gemini",
+    "claude": "anthropic",
+    "openai": "openai",
+}
+
+# litellm が参照する API キー環境変数
+_LITELLM_ENV_VAR: dict[str, str] = {
+    "gemini": "GEMINI_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+    "openai": "OPENAI_API_KEY",
+}
+
+_DEFAULT_PROMPT = "以下のドキュメントを日本語で簡潔に要約してください。\n\n{text}"
 
 
-class _NullEngine(SummarizerEngine):
-    """list/show/deleteコマンド用のダミーエンジン。
+def _resolve_db_path(config: Config, override: str | None) -> Path:
+    """digestkit ``SQLiteSink`` 用の DB パスを解決する。
 
-    要約生成を行わないコマンドでSummarizeServiceを構築するために使用。
-    summarize()が呼ばれた場合はエラーを送出する。
+    既存 pdfsum は ``[database].path`` (デフォルト ``user_data_dir/summaries.db``)
+    を使っていたが、digestkit 化に伴いスキーマが変わるため pdfsum 名義の DB を
+    引き続き使う (旧データとは別テーブルになる前提)。
     """
-
-    def summarize(self, text: str, length: str) -> str:
-        raise PdfsumError("要約エンジンが初期化されていません")
-
-    def get_model_name(self) -> str:
-        return ""
-
-    def get_max_input_tokens(self) -> int:
-        return 0
+    if override is not None:
+        return Path(override).expanduser()
+    return Path(config.database.path).expanduser()
 
 
-UUID_PATTERN = re.compile(
-    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-)
-SHORT_ID_PATTERN = re.compile(r"^[0-9a-f]{8}$")
+def _build_digester(
+    source_path: Path,
+    *,
+    glob: str,
+    db_path: Path,
+    config: Config,
+) -> Digester:
+    """pdfsum 設定から digestkit Digester を組み立てる。"""
+    provider = config.llm.provider
+    _mapped = _PROVIDER_TO_LITELLM.get(provider)
+    if _mapped is None:
+        raise ConfigError(f"digestkit に未対応のプロバイダです: {provider}")
+    litellm_provider: str = _mapped
 
+    api_key = ConfigManager().get_api_key(config, provider)
 
-def _is_full_uuid(value: str) -> bool:
-    """完全なUUID v4形式かどうかを判定する"""
-    return bool(UUID_PATTERN.match(value))
+    # litellm は OS 環境変数からキーを拾う仕様。pdfsum 設定経由のキーを
+    # 該当プロバイダ標準名に流し込む (既存値があればそれを優先)。
+    os.environ.setdefault(_LITELLM_ENV_VAR[litellm_provider], api_key)
 
-
-def _is_short_id(value: str) -> bool:
-    """短縮ID（8文字16進数）かどうかを判定する"""
-    return bool(SHORT_ID_PATTERN.match(value))
-
-
-def _validate_id(summary_id: str) -> None:
-    """IDの形式を検証する。
-
-    Raises:
-        PdfsumError: 無効なID形式の場合
-    """
-    if not _is_full_uuid(summary_id) and not _is_short_id(summary_id):
-        raise PdfsumError(
-            f"無効なID形式です: {summary_id} "
-            f"（UUID v4または先頭8文字の16進数を指定してください）"
+    user_prompt = _DEFAULT_PROMPT
+    if config.summary.extra_instructions:
+        user_prompt = (
+            f"{config.summary.extra_instructions}\n\n"
+            f"以下のドキュメントを日本語で簡潔に要約してください。\n\n{{text}}"
         )
 
+    db_path.parent.mkdir(parents=True, exist_ok=True)
 
-def _build_service_for_summarize() -> SummarizeService:
-    """summarizeコマンド用のSummarizeServiceを組み立てる"""
-    config_manager = ConfigManager()
-    config = config_manager.load()
-    api_key = config_manager.get_api_key(config, config.llm.provider)
-    engine = SummarizerFactory.create(
-        config.llm.provider, api_key, config.llm.model, config.summary
-    )
-    extractor = PDFExtractor()
-    repository = SQLiteSummaryRepository(config.database.path)
-    return SummarizeService(extractor, engine, repository)
+    class _PdfsumDigester(Digester):
+        source = LocalDirectorySource(source_path, glob=glob)
+        extractor = PDFExtractor()
+        summarizer = LLMSummarizer(
+            provider=litellm_provider,
+            model=config.llm.model,
+            user_prompt_template=user_prompt,
+        )
+        sink = SQLiteSink(db_path)
+
+    return _PdfsumDigester()
 
 
-def _build_service_for_readonly() -> SummarizeService:
-    """list/show/deleteコマンド用のSummarizeServiceを組み立てる。
+def _select_rows(
+    db_path: Path,
+    *,
+    where: str = "",
+    params: tuple[Any, ...] = (),
+    order: str = "ORDER BY created_at DESC",
+) -> list[dict[str, Any]]:
+    """digestkit が書いた ``digests`` テーブルを読む。"""
+    if not db_path.exists():
+        return []
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        sql = "SELECT rowid, * FROM digests"
+        if where:
+            sql += f" WHERE {where}"
+        sql += f" {order}"
+        cur = conn.execute(sql, params)
+        return [dict(row) for row in cur.fetchall()]
+    except sqlite3.OperationalError:
+        # テーブル未作成 = まだ summarize 未実行
+        return []
+    finally:
+        conn.close()
 
-    エンジン生成不要のため、ダミーエンジンで組み立てる。
-    APIキー未設定でもlist/show/deleteは動作する。
+
+def _resolve_short_id(db_path: Path, short_id: str) -> dict[str, Any]:
+    """item_id の末尾 (basename) で 1 件を一意に特定する。
+
+    digestkit の ``Item.id`` は絶対パス文字列。UUID ではないため、ユーザー
+    入力としてはファイル名 (basename) もしくはパスの substring を受け付ける。
     """
-    config_manager = ConfigManager()
-    config = config_manager.load()
-    repository = SQLiteSummaryRepository(config.database.path)
-    extractor = PDFExtractor()
-    engine = _NullEngine()
-    return SummarizeService(extractor, engine, repository)
+    rows = _select_rows(db_path, where="item_id LIKE ?", params=(f"%{short_id}%",))
+    if not rows:
+        raise PdfsumError(f"要約が見つかりません: {short_id}")
+    if len({r["item_id"] for r in rows}) > 1:
+        raise PdfsumError(
+            f"'{short_id}' に複数の要約が一致しました。"
+            f"より具体的なパスを指定してください"
+        )
+    return rows[0]
 
 
-def cmd_summarize(args: argparse.Namespace) -> int:
-    """PDF要約コマンド"""
-    display.print_progress(1, 3, "PDFテキスト抽出中...")
-    service = _build_service_for_summarize()
-    summary = service.summarize(args.pdf_path, args.length)
-    display.print_progress(2, 3, "テキスト要約中... 完了")
-    display.print_progress(3, 3, "結果を保存中... 完了")
-    display.print_summary_result(summary)
-    return 0
-
-
-def cmd_list(args: argparse.Namespace) -> int:
-    """保存済み要約一覧コマンド"""
-    service = _build_service_for_readonly()
-    summaries = service.list_summaries()
-    display.print_summary_list(summaries, full_id=args.full_id)
-    return 0
-
-
-def cmd_show(args: argparse.Namespace) -> int:
-    """保存済み要約表示コマンド"""
-    _validate_id(args.summary_id)
-    service = _build_service_for_readonly()
-
-    if _is_full_uuid(args.summary_id):
-        summary = service.get_summary(args.summary_id)
-        if summary is None:
-            raise PdfsumError(
-                f"要約が見つかりません (ID: {args.summary_id})"
-            )
-    else:
-        summary = service.get_summary_by_prefix(args.summary_id)
-
-    display.print_summary_detail(summary)
-    return 0
-
-
-def cmd_digest(args: argparse.Namespace) -> int:
-    """digestkitを使ってディレクトリ配下のPDFを一括要約する (ドッグフーディング)。"""
-    from pathlib import Path
-
-    from pdfsum.digest_runner import run_digest
-
-    directory = Path(args.directory)
-    if not directory.is_dir():
-        raise PdfsumError(f"ディレクトリが存在しません: {directory}")
-
-    result = run_digest(
-        directory,
-        glob=args.glob,
-        db_path=args.db_path,
-        limit=args.limit,
-        dry_run=args.dry_run,
-    )
-
+def _print_run_result(result: RunResult) -> int:
     print(
-        f"digest完了: success={result.success} "
-        f"skipped={result.skipped} failures={len(result.failures)}"
+        f"完了: success={result.success} skipped={result.skipped} "
+        f"failures={len(result.failures)}"
     )
     for failure in result.failures:
         display.print_error(
@@ -154,29 +156,75 @@ def cmd_digest(args: argparse.Namespace) -> int:
     return 0 if not result.failures else 1
 
 
-def cmd_delete(args: argparse.Namespace) -> int:
-    """保存済み要約削除コマンド"""
-    _validate_id(args.summary_id)
-    service = _build_service_for_readonly()
+def cmd_summarize(args: argparse.Namespace) -> int:
+    """指定パス (PDF または PDF を含むディレクトリ) を要約する。"""
+    target = Path(args.path).expanduser()
+    if not target.exists():
+        raise PdfsumError(f"パスが存在しません: {target}")
 
-    if _is_full_uuid(args.summary_id):
-        result = service.delete_summary(args.summary_id)
-        if not result:
-            raise PdfsumError(
-                f"要約が見つかりません (ID: {args.summary_id})"
-            )
+    if target.is_file():
+        source_dir = target.parent
+        glob = target.name
     else:
-        service.resolve_and_delete(args.summary_id)
+        source_dir = target
+        glob = args.glob
 
-    display.print_success("要約を削除しました。")
+    config = ConfigManager().load()
+    db_path = _resolve_db_path(config, args.db_path)
+    digester = _build_digester(
+        source_dir, glob=glob, db_path=db_path, config=config
+    )
+    result = digester.run(limit=args.limit, dry_run=args.dry_run)
+    return _print_run_result(result)
+
+
+def cmd_list(args: argparse.Namespace) -> int:
+    """保存済み要約を一覧表示する。"""
+    config = ConfigManager().load()
+    db_path = _resolve_db_path(config, args.db_path)
+    rows = _select_rows(db_path)
+    display.print_digest_list(rows, full_id=args.full_id)
     return 0
 
 
+def cmd_show(args: argparse.Namespace) -> int:
+    """指定 ID (パス末尾の部分一致) の要約詳細を表示する。"""
+    config = ConfigManager().load()
+    db_path = _resolve_db_path(config, args.db_path)
+    row = _resolve_short_id(db_path, args.summary_id)
+    display.print_digest_detail(row)
+    return 0
+
+
+def cmd_delete(args: argparse.Namespace) -> int:
+    """指定 ID に紐づく要約を全削除する (item_id 一致全行)。"""
+    config = ConfigManager().load()
+    db_path = _resolve_db_path(config, args.db_path)
+    row = _resolve_short_id(db_path, args.summary_id)
+    conn = sqlite3.connect(db_path)
+    try:
+        with conn:
+            conn.execute(
+                "DELETE FROM digests WHERE item_id = ?", (row["item_id"],)
+            )
+    finally:
+        conn.close()
+    display.print_success(f"要約を削除しました: {row['item_id']}")
+    return 0
+
+
+def _add_db_path_arg(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--db-path",
+        default=None,
+        help="SQLite 出力先 (未指定時は config.toml の database.path)",
+    )
+
+
 def _build_parser() -> argparse.ArgumentParser:
-    """argparseパーサーを構築する"""
     parser = argparse.ArgumentParser(
         prog="pdfsum",
-        description="PDFドキュメント要約CLIツール",
+        description="PDFドキュメント要約CLIツール (digestkit ベース)",
     )
     parser.add_argument(
         "--version",
@@ -186,23 +234,33 @@ def _build_parser() -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers(dest="command")
 
-    # summarize サブコマンド
     summarize_parser = subparsers.add_parser(
         "summarize",
-        help="PDFファイルを要約する",
+        help="PDF ファイルまたはディレクトリ配下の PDF を要約する",
     )
     summarize_parser.add_argument(
-        "pdf_path",
-        help="PDFファイルのパス",
+        "path",
+        help="PDF ファイルパス または PDF を含むディレクトリ",
     )
     summarize_parser.add_argument(
-        "--length",
-        choices=["short", "standard", "detailed"],
-        default="standard",
-        help="要約の長さ（デフォルト: standard）",
+        "--glob",
+        default="*.pdf",
+        help="ディレクトリ指定時の glob パターン (デフォルト: *.pdf)",
     )
+    summarize_parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="処理件数の上限",
+    )
+    summarize_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="シンク書き込みをスキップする",
+    )
+    _add_db_path_arg(summarize_parser)
 
-    # list サブコマンド
     list_parser = subparsers.add_parser(
         "list",
         help="保存済み要約の一覧を表示する",
@@ -211,73 +269,34 @@ def _build_parser() -> argparse.ArgumentParser:
         "--full-id",
         action="store_true",
         default=False,
-        help="完全なUUID v4を表示する",
+        help="完全な item_id (絶対パス) を表示する",
     )
+    _add_db_path_arg(list_parser)
 
-    # show サブコマンド
     show_parser = subparsers.add_parser(
         "show",
         help="保存済み要約の詳細を表示する",
     )
     show_parser.add_argument(
         "summary_id",
-        help="要約ID（UUID v4または先頭8文字）",
+        help="要約 ID (item_id のパス末尾またはファイル名の部分一致)",
     )
+    _add_db_path_arg(show_parser)
 
-    # digest サブコマンド (digestkit ベース、ドッグフーディング)
-    digest_parser = subparsers.add_parser(
-        "digest",
-        help="digestkitでディレクトリ配下のPDFを一括要約する",
-    )
-    digest_parser.add_argument(
-        "directory",
-        help="PDFを格納したディレクトリのパス",
-    )
-    digest_parser.add_argument(
-        "--glob",
-        default="*.pdf",
-        help="対象ファイルのglobパターン（デフォルト: *.pdf）",
-    )
-    digest_parser.add_argument(
-        "--db-path",
-        default=None,
-        help="digestkit用SQLite出力先（デフォルト: ./digests.db）",
-    )
-    digest_parser.add_argument(
-        "--limit",
-        type=int,
-        default=None,
-        help="処理件数の上限",
-    )
-    digest_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=False,
-        help="シンク書き込みをスキップする",
-    )
-
-    # delete サブコマンド
     delete_parser = subparsers.add_parser(
         "delete",
         help="保存済み要約を削除する",
     )
     delete_parser.add_argument(
         "summary_id",
-        help="要約ID（UUID v4または先頭8文字）",
+        help="要約 ID (item_id のパス末尾またはファイル名の部分一致)",
     )
+    _add_db_path_arg(delete_parser)
 
     return parser
 
 
 def main(args: list[str] | None = None) -> int:
-    """メインエントリポイント。
-
-    Args:
-        args: コマンドライン引数。Noneの場合sys.argvを使用
-
-    Returns:
-        終了コード（0: 成功, 1: エラー, 2: 引数エラー）
-    """
     parser = _build_parser()
     parsed = parser.parse_args(args)
 
@@ -290,9 +309,7 @@ def main(args: list[str] | None = None) -> int:
         "list": cmd_list,
         "show": cmd_show,
         "delete": cmd_delete,
-        "digest": cmd_digest,
     }
-
     handler = commands.get(parsed.command)
     if handler is None:
         parser.print_help()

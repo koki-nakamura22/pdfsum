@@ -1,132 +1,81 @@
-"""出力フォーマット・プログレス表示"""
+"""出力フォーマット (digestkit ``digests`` テーブル行ベース)。"""
+
+from __future__ import annotations
 
 import sys
-
-from pdfsum.models.summary import Summary
+from pathlib import Path
+from typing import Any
 
 SEPARATOR = "━" * 40
 
 
-def print_summary_result(summary: Summary) -> None:
-    """要約結果を表示する。
-
-    Args:
-        summary: 表示する要約オブジェクト
-    """
-    print(f"\n📄 {summary.file_name} ({summary.page_count}ページ)")
-    print(SEPARATOR)
-    print()
-    print(summary.summary_text)
-    print()
-    print(SEPARATOR)
-    print(
-        f"モデル: {summary.model_name} | "
-        f"要約ID: {summary.id}"
-    )
+def _basename(item_id: str) -> str:
+    return Path(item_id).name
 
 
-def print_summary_list(
-    summaries: list[Summary], full_id: bool = False
-) -> None:
-    """要約一覧をテーブル形式で表示する。
+def _short(item_id: str, width: int = 24) -> str:
+    name = _basename(item_id)
+    return name if len(name) <= width else name[: width - 3] + "..."
 
-    Args:
-        summaries: 表示する要約のリスト
-        full_id: Trueの場合、完全UUIDを表示する
-    """
-    if not summaries:
+
+def print_digest_list(rows: list[dict[str, Any]], full_id: bool = False) -> None:
+    """digestkit ``digests`` 行の一覧をテーブル表示する。"""
+    if not rows:
         print("保存済みの要約はありません。")
         return
 
-    if full_id:
-        id_header = "ID"
-        id_width = 36
-    else:
-        id_header = "ID"
-        id_width = 8
+    id_width = 60 if full_id else 24
+    id_header = "item_id" if full_id else "ファイル名"
 
     header = (
         f"{id_header:<{id_width}}  "
-        f"{'ファイル名':<24}  "
-        f"{'ページ':>6}  "
-        f"{'長さ':<8}  "
-        f"{'作成日時':<16}"
+        f"{'モデル':<24}  "
+        f"{'tokens(in/out)':>16}  "
+        f"{'作成日時':<20}"
     )
     separator = (
         f"{'─' * id_width}  "
         f"{'─' * 24}  "
-        f"{'─' * 6}  "
-        f"{'─' * 8}  "
-        f"{'─' * 16}"
+        f"{'─' * 16}  "
+        f"{'─' * 20}"
     )
-
     print(header)
     print(separator)
-
-    for s in summaries:
-        display_id = s.id if full_id else s.id[:8]
-        file_name = s.file_name
-        if len(file_name) > 24:
-            file_name = file_name[:21] + "..."
-        created = s.created_at.strftime("%Y-%m-%d %H:%M")
-
+    for r in rows:
+        item_id = r["item_id"]
+        display_id = item_id if full_id else _short(item_id, id_width)
+        model = (r.get("model") or "")[:24]
+        tokens = f"{r.get('tokens_in', 0)}/{r.get('tokens_out', 0)}"
+        created = (r.get("created_at") or "")[:19]
         print(
             f"{display_id:<{id_width}}  "
-            f"{file_name:<24}  "
-            f"{s.page_count:>6}  "
-            f"{s.summary_length:<8}  "
-            f"{created:<16}"
+            f"{model:<24}  "
+            f"{tokens:>16}  "
+            f"{created:<20}"
         )
 
 
-def print_summary_detail(summary: Summary) -> None:
-    """要約の詳細を表示する。
-
-    Args:
-        summary: 表示する要約オブジェクト
-    """
-    print(f"\n要約ID: {summary.id}")
-    print(f"ファイル: {summary.file_name}")
-    print(f"パス: {summary.pdf_path}")
-    print(f"ページ数: {summary.page_count}")
-    print(f"要約長: {summary.summary_length}")
-    print(f"モデル: {summary.model_name}")
+def print_digest_detail(row: dict[str, Any]) -> None:
+    """digestkit ``digests`` 1 行の詳細を表示する。"""
+    print(f"\nitem_id: {row['item_id']}")
+    print(f"モデル: {row.get('model') or ''}")
     print(
-        f"作成日時: "
-        f"{summary.created_at.strftime('%Y-%m-%d %H:%M:%S')}"
+        f"tokens: in={row.get('tokens_in', 0)} "
+        f"out={row.get('tokens_out', 0)} "
+        f"latency_ms={row.get('latency_ms', 0)}"
     )
+    print(f"作成日時: {row.get('created_at') or ''}")
     print()
     print(SEPARATOR)
     print()
-    print(summary.summary_text)
+    print(row.get("summary") or "")
     print()
     print(SEPARATOR)
-
-
-def print_progress(step: int, total: int, message: str) -> None:
-    """プログレス表示。
-
-    Args:
-        step: 現在のステップ番号
-        total: 総ステップ数
-        message: 表示メッセージ
-    """
-    print(f"[{step}/{total}] {message}", flush=True)
 
 
 def print_error(message: str) -> None:
-    """エラーメッセージを表示する。
-
-    Args:
-        message: エラーメッセージ
-    """
     print(f"エラー: {message}", file=sys.stderr)
 
 
 def print_success(message: str) -> None:
-    """成功メッセージを表示する。
-
-    Args:
-        message: 成功メッセージ
-    """
     print(message)
