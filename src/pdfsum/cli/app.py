@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from digestkit import Digester, Item, content_sha256_key
-from digestkit.dedup import default_seen_store_path
+from digestkit.dedup import SQLiteSeenStore, default_seen_store_path
 from digestkit.extractors import PDFExtractor
 from digestkit.sinks import SQLiteSink
 from digestkit.sources import LocalDirectorySource
@@ -96,24 +96,30 @@ def _build_digester(
 
     # 長文 PDF (論文 / 書籍章) はモデル上限を超えるため Chunked を使う.
     # 上限内に収まる短文は ChunkedLLMSummarizer 内で単発呼び出しに自動 fallback する.
-    class PdfsumDigester(Digester):
-        source = LocalDirectorySource(source_path, glob=glob)
-        extractor = PDFExtractor()
-        summarizer = ChunkedLLMSummarizer(
+    #
+    # inboxkit#13: digestkit が constructor injection をサポートしたため、
+    # ローカル class 定義をやめてコンストラクタ kwarg で組み立てる.
+    # SeenStore のパスは Digester 既定 (=type(self).__name__ = "Digester") では
+    # 無く ``_seen_store_path()`` (= "PdfsumDigester") を明示し、本ブランチ以前の
+    # ユーザーの dedup 履歴と互換を保つ.
+    return Digester(
+        source=LocalDirectorySource(source_path, glob=glob),
+        extractor=PDFExtractor(),
+        summarizer=ChunkedLLMSummarizer(
             provider=litellm_provider,
             model=config.llm.model,
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
             prompts=prompts,
             default_length=config.summary.default_length or "standard",
-        )
-        sink = SQLiteSink(db_path)
+        ),
+        sink=SQLiteSink(db_path),
+        seen_store=SQLiteSeenStore(_seen_store_path()),
         # Issue #12 / inboxkit#21: PDF 内容の SHA-256 を dedup キーにする.
         # 既定の Item.id (絶対パス) ベースだと、同一内容の別パスが再要約され、
         # 同一パスの内容差し替え時に再要約されない. content_sha256_key は両方を解決.
-        dedup_key = staticmethod(content_sha256_key)
-
-    return PdfsumDigester()
+        dedup_key=content_sha256_key,
+    )
 
 
 def _seen_store_path() -> Path:
