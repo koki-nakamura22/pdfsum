@@ -8,6 +8,9 @@ PDFドキュメントをLLM APIで要約するCLIツール。
 >
 > - 要約の長さ指定 (`--length short/standard/detailed`)
 > - PDF SHA-256 ハッシュによるキャッシュ (同一ファイルの再処理スキップ)
+>   - 注: digestkit の `SeenStore` も dedup を提供しますが、判定キーは **`Item.id` = 絶対パス** です。
+>     つまり同じパスのファイルを内容差し替えしても再要約されない / パスが違えば中身が同じでも再要約される
+>     という挙動になり、旧版のハッシュベースキャッシュとは意味が異なります。
 > - 大規模 PDF のチャンク再帰要約 (digestkit `LLMSummarizer` は単発呼び出し)
 > - pdfsum 独自スキーマ + プログラム的公開 API (`pdfsum.create_service` / `SummarizeService`)
 >

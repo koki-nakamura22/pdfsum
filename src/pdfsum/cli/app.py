@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from digestkit import Digester
+from digestkit.dedup import default_seen_store_path
 from digestkit.extractors import PDFExtractor
 from digestkit.sinks import SQLiteSink
 from digestkit.sources import LocalDirectorySource
@@ -45,6 +46,7 @@ _LITELLM_ENV_VAR: dict[str, str] = {
 }
 
 _DEFAULT_PROMPT = "以下のドキュメントを日本語で簡潔に要約してください。\n\n{text}"
+_DIGESTER_CLASS_NAME = "PdfsumDigester"
 
 
 def _resolve_db_path(config: Config, override: str | None) -> Path:
@@ -75,9 +77,9 @@ def _build_digester(
 
     api_key = ConfigManager().get_api_key(config, provider)
 
-    # litellm は OS 環境変数からキーを拾う仕様。pdfsum 設定経由のキーを
-    # 該当プロバイダ標準名に流し込む (既存値があればそれを優先)。
-    os.environ.setdefault(_LITELLM_ENV_VAR[litellm_provider], api_key)
+    # litellm はプロバイダ標準名の環境変数を参照するため、pdfsum 設定で
+    # 解決したキーをその変数名へ正規化して流し込む。
+    os.environ[_LITELLM_ENV_VAR[litellm_provider]] = api_key
 
     user_prompt = _DEFAULT_PROMPT
     if config.summary.extra_instructions:
@@ -88,7 +90,7 @@ def _build_digester(
 
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    class _PdfsumDigester(Digester):
+    class PdfsumDigester(Digester):
         source = LocalDirectorySource(source_path, glob=glob)
         extractor = PDFExtractor()
         summarizer = LLMSummarizer(
@@ -98,7 +100,11 @@ def _build_digester(
         )
         sink = SQLiteSink(db_path)
 
-    return _PdfsumDigester()
+    return PdfsumDigester()
+
+
+def _seen_store_path() -> Path:
+    return default_seen_store_path(_DIGESTER_CLASS_NAME)
 
 
 def _select_rows(
@@ -120,11 +126,17 @@ def _select_rows(
         sql += f" {order}"
         cur = conn.execute(sql, params)
         return [dict(row) for row in cur.fetchall()]
-    except sqlite3.OperationalError:
-        # テーブル未作成 = まだ summarize 未実行
-        return []
+    except sqlite3.OperationalError as exc:
+        if "no such table: digests" in str(exc):
+            # テーブル未作成 = まだ summarize 未実行
+            return []
+        raise PdfsumError(f"SQLite 読み取りに失敗しました: {exc}") from exc
     finally:
         conn.close()
+
+
+def _escape_like(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def _resolve_short_id(db_path: Path, short_id: str) -> dict[str, Any]:
@@ -133,7 +145,11 @@ def _resolve_short_id(db_path: Path, short_id: str) -> dict[str, Any]:
     digestkit の ``Item.id`` は絶対パス文字列。UUID ではないため、ユーザー
     入力としてはファイル名 (basename) もしくはパスの substring を受け付ける。
     """
-    rows = _select_rows(db_path, where="item_id LIKE ?", params=(f"%{short_id}%",))
+    rows = _select_rows(
+        db_path,
+        where=r"item_id LIKE ? ESCAPE '\'",
+        params=(f"%{_escape_like(short_id)}%",),
+    )
     if not rows:
         raise PdfsumError(f"要約が見つかりません: {short_id}")
     if len({r["item_id"] for r in rows}) > 1:
@@ -142,6 +158,29 @@ def _resolve_short_id(db_path: Path, short_id: str) -> dict[str, Any]:
             f"より具体的なパスを指定してください"
         )
     return rows[0]
+
+
+def _delete_seen_item(item_id: str) -> None:
+    seen_db_path = _seen_store_path()
+    if not seen_db_path.exists():
+        return
+
+    conn = sqlite3.connect(seen_db_path)
+    try:
+        with conn:
+            conn.execute(
+                "DELETE FROM seen_items WHERE item_id = ?",
+                (item_id,),
+            )
+    except sqlite3.OperationalError as exc:
+        if "no such table: seen_items" not in str(exc):
+            raise PdfsumError(
+                f"SeenStore の更新に失敗しました: {exc}"
+            ) from exc
+    except sqlite3.Error as exc:
+        raise PdfsumError(f"SeenStore の更新に失敗しました: {exc}") from exc
+    finally:
+        conn.close()
 
 
 def _print_run_result(result: RunResult) -> int:
@@ -207,8 +246,11 @@ def cmd_delete(args: argparse.Namespace) -> int:
             conn.execute(
                 "DELETE FROM digests WHERE item_id = ?", (row["item_id"],)
             )
+    except sqlite3.Error as exc:
+        raise PdfsumError(f"SQLite 書き込みに失敗しました: {exc}") from exc
     finally:
         conn.close()
+    _delete_seen_item(row["item_id"])
     display.print_success(f"要約を削除しました: {row['item_id']}")
     return 0
 
