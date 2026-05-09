@@ -93,6 +93,22 @@ pdfsum show <summary-id>  # 8文字のIDプレフィックスでもOK
 pdfsum delete <summary-id>
 ```
 
+### ディレクトリ配下のPDFを一括要約 (digestkit ベース)
+
+`pdfsum digest` は [digestkit](https://github.com/koki-nakamura22/inboxkit/tree/main/packages/digestkit)
+の `Source → Extractor → Summarizer → Sink` パイプラインを利用してディレクトリ配下の
+PDF を一括要約するサブコマンドです（ドッグフーディング目的で追加）。
+
+```bash
+pdfsum digest ./papers
+pdfsum digest ./papers --glob "*.pdf" --db-path ./digests.db --limit 10
+pdfsum digest ./papers --dry-run
+```
+
+設定 (provider / model / APIキー) は既存の `config.toml` と環境変数を流用します。
+出力先 SQLite には `digestkit` 互換のスキーマで要約が書き込まれ、`SeenStore` による
+重複処理スキップも自動で有効になります。
+
 ## ライブラリとしての使用
 
 `pdfsum`はPythonコードからも利用できます。

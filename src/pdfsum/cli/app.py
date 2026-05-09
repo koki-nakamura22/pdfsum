@@ -125,6 +125,35 @@ def cmd_show(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_digest(args: argparse.Namespace) -> int:
+    """digestkitを使ってディレクトリ配下のPDFを一括要約する (ドッグフーディング)。"""
+    from pathlib import Path
+
+    from pdfsum.digest_runner import run_digest
+
+    directory = Path(args.directory)
+    if not directory.is_dir():
+        raise PdfsumError(f"ディレクトリが存在しません: {directory}")
+
+    result = run_digest(
+        directory,
+        glob=args.glob,
+        db_path=args.db_path,
+        limit=args.limit,
+        dry_run=args.dry_run,
+    )
+
+    print(
+        f"digest完了: success={result.success} "
+        f"skipped={result.skipped} failures={len(result.failures)}"
+    )
+    for failure in result.failures:
+        display.print_error(
+            f"  - {failure.item.id} [{failure.stage}]: {failure.error}"
+        )
+    return 0 if not result.failures else 1
+
+
 def cmd_delete(args: argparse.Namespace) -> int:
     """保存済み要約削除コマンド"""
     _validate_id(args.summary_id)
@@ -195,6 +224,38 @@ def _build_parser() -> argparse.ArgumentParser:
         help="要約ID（UUID v4または先頭8文字）",
     )
 
+    # digest サブコマンド (digestkit ベース、ドッグフーディング)
+    digest_parser = subparsers.add_parser(
+        "digest",
+        help="digestkitでディレクトリ配下のPDFを一括要約する",
+    )
+    digest_parser.add_argument(
+        "directory",
+        help="PDFを格納したディレクトリのパス",
+    )
+    digest_parser.add_argument(
+        "--glob",
+        default="*.pdf",
+        help="対象ファイルのglobパターン（デフォルト: *.pdf）",
+    )
+    digest_parser.add_argument(
+        "--db-path",
+        default=None,
+        help="digestkit用SQLite出力先（デフォルト: ./digests.db）",
+    )
+    digest_parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="処理件数の上限",
+    )
+    digest_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="シンク書き込みをスキップする",
+    )
+
     # delete サブコマンド
     delete_parser = subparsers.add_parser(
         "delete",
@@ -229,6 +290,7 @@ def main(args: list[str] | None = None) -> int:
         "list": cmd_list,
         "show": cmd_show,
         "delete": cmd_delete,
+        "digest": cmd_digest,
     }
 
     handler = commands.get(parsed.command)

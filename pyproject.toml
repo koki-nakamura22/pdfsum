@@ -10,7 +10,16 @@ dependencies = [
     "tomli-w>=1.0",
     "python-dotenv>=1.2.1",
     "platformdirs>=4.0",
+    # digestkit (inboxkit monorepo配下、PyPI未公開) — ドッグフーディング目的で追加。
+    # 現状 inboxkit のリモート main にはまだ packages/digestkit が公開されていないため、
+    # ローカルパス依存で導入する。inboxkit が公開されたら git URL or PyPI 参照へ切替予定。
+    # NOTE: `notion` extra も付けないと ``digestkit.sources.__init__`` が
+    # NotionDatabaseSource を eager import して失敗する (digestkit 0.1.0 の不具合)。
+    "digestkit[pdf,notion]",
 ]
+
+[tool.uv.sources]
+digestkit = { path = "../inboxkit/packages/digestkit", editable = true }
 
 [project.scripts]
 pdfsum = "pdfsum.cli.app:main"
