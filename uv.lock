@@ -338,7 +338,7 @@ wheels = [
 [[package]]
 name = "digestkit"
 version = "0.1.0"
-source = { editable = "../inboxkit/packages/digestkit" }
+source = { git = "https://github.com/koki-nakamura22/inboxkit.git?subdirectory=packages%2Fdigestkit&branch=main#74a1ae342a31845c1ed3f8318d34d60608737a35" }
 dependencies = [
     { name = "litellm" },
     { name = "python-dotenv" },
@@ -347,18 +347,6 @@ dependencies = [
 [package.optional-dependencies]
 pdf = [
     { name = "pypdf" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "digestkit", extras = ["pdf", "web", "notion", "slack", "email"], marker = "extra == 'all'" },
-    { name = "httpx", marker = "extra == 'slack'", specifier = ">=0.27" },
-    { name = "httpx", marker = "extra == 'web'", specifier = ">=0.27" },
-    { name = "litellm", specifier = ">=1.50,<2" },
-    { name = "notion-client", marker = "extra == 'notion'", specifier = ">=2" },
-    { name = "pypdf", marker = "extra == 'pdf'", specifier = ">=4" },
-    { name = "python-dotenv", specifier = ">=1" },
-    { name = "trafilatura", marker = "extra == 'web'", specifier = ">=1.12" },
 ]
 
 [[package]]
@@ -1121,7 +1109,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "digestkit", extras = ["pdf"], editable = "../inboxkit/packages/digestkit" },
+    { name = "digestkit", extras = ["pdf"], git = "https://github.com/koki-nakamura22/inboxkit.git?subdirectory=packages%2Fdigestkit&branch=main" },
     { name = "httpx", specifier = ">=0.27,<1.0" },
     { name = "platformdirs", specifier = ">=4.0" },
     { name = "pypdfium2", specifier = ">=4.0" },

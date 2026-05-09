@@ -11,13 +11,13 @@ dependencies = [
     "python-dotenv>=1.2.1",
     "platformdirs>=4.0",
     # digestkit (inboxkit monorepo配下、PyPI未公開) — ドッグフーディング目的で追加。
-    # 現状 inboxkit のリモート main にはまだ packages/digestkit が公開されていないため、
-    # ローカルパス依存で導入する。inboxkit が公開されたら git URL or PyPI 参照へ切替予定。
+    # PyPI 公開までの短期繋ぎとして、umbrella リポジトリの main ブランチを subdirectory
+    # 指定で参照する (inboxkit#3 案B)。PyPI 公開後は通常の version 指定に戻す。
     "digestkit[pdf]",
 ]
 
 [tool.uv.sources]
-digestkit = { path = "../inboxkit/packages/digestkit", editable = true }
+digestkit = { git = "https://github.com/koki-nakamura22/inboxkit.git", subdirectory = "packages/digestkit", branch = "main" }
 
 [project.scripts]
 pdfsum = "pdfsum.cli.app:main"
