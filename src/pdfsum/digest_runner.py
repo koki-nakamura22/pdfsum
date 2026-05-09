@@ -15,10 +15,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-# NOTE: digestkit 0.1.0 は `digestkit.sources.__init__` で `NotionDatabaseSource`
-# を eager import するため、`notion` extra を必ずインストールする必要がある
-# (本リポジトリの pyproject.toml で `digestkit[pdf,notion]` 指定済み)。
-# upstream で sources の lazy import が整備されたら notion extra は外せる。
 from digestkit import Digester
 from digestkit.extractors import PDFExtractor as DigestKitPDFExtractor
 from digestkit.sinks import SQLiteSink
@@ -38,9 +34,7 @@ _PROVIDER_TO_LITELLM: dict[str, str] = {
     "openai": "openai",
 }
 
-_DEFAULT_PROMPT = (
-    "以下のドキュメントを日本語で簡潔に要約してください。\n\n{text}"
-)
+_DEFAULT_PROMPT = "以下のドキュメントを日本語で簡潔に要約してください。\n\n{text}"
 
 
 def build_digester(
