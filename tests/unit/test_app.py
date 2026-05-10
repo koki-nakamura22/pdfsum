@@ -135,6 +135,36 @@ class TestCmdSummarize:
         with pytest.raises(PdfsumError, match="要約失敗"):
             cmd_summarize(args)
 
+    @patch("pdfsum.cli.app.ConfigManager")
+    @patch("pdfsum.cli.app._build_service_for_write")
+    def test_falls_back_to_config_default_length_when_arg_is_none(
+        self, mock_build: Mock, mock_mgr: Mock
+    ) -> None:
+        """--length 未指定時は config.summary.default_length にフォールバック"""
+        mock_service = Mock()
+        mock_build.return_value = mock_service
+        mock_service.summarize.return_value = _make_summary()
+        mock_mgr.return_value.load.return_value.summary.default_length = "detailed"
+
+        args = Namespace(pdf_path="/test.pdf", length=None)
+        cmd_summarize(args)
+        mock_service.summarize.assert_called_once_with("/test.pdf", "detailed")
+
+    @patch("pdfsum.cli.app.ConfigManager")
+    @patch("pdfsum.cli.app._build_service_for_write")
+    def test_explicit_arg_overrides_config_default(
+        self, mock_build: Mock, mock_mgr: Mock
+    ) -> None:
+        """--length 明示指定時は config.summary.default_length より優先される"""
+        mock_service = Mock()
+        mock_build.return_value = mock_service
+        mock_service.summarize.return_value = _make_summary()
+        mock_mgr.return_value.load.return_value.summary.default_length = "detailed"
+
+        args = Namespace(pdf_path="/test.pdf", length="short")
+        cmd_summarize(args)
+        mock_service.summarize.assert_called_once_with("/test.pdf", "short")
+
 
 class TestCmdList:
     """cmd_list のテスト"""
