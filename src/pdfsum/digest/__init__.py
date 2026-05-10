@@ -2,4 +2,4 @@
 from pdfsum.digest.sink import PdfsumSink
 from pdfsum.digest.source import SingleFileSource
 
-__all__ = ["SingleFileSource", "PdfsumSink"]
+__all__ = ["PdfsumSink", "SingleFileSource"]

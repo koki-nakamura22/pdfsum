@@ -15,7 +15,6 @@ from pdfsum.config.manager import ConfigManager
 from pdfsum.errors import PdfsumError, exit_code_for, format_digestkit_error
 from pdfsum.services.summarize_service import SummarizeService
 
-
 UUID_PATTERN = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 )

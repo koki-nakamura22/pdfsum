@@ -5,13 +5,13 @@ from __future__ import annotations
 import hashlib
 import sqlite3
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
-
 from digestkit.sinks import SinkError
 from digestkit.types import Digest, Item
+
 from pdfsum.digest.sink import PdfsumSink
 
 
@@ -31,7 +31,13 @@ def pdf_file(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def sample_digest() -> Digest:
-    return Digest(summary="テスト要約", tokens_in=10, tokens_out=20, latency_ms=500, model="test-model")
+    return Digest(
+        summary="テスト要約",
+        tokens_in=10,
+        tokens_out=20,
+        latency_ms=500,
+        model="test-model",
+    )
 
 
 class TestPdfsumSinkInit:
@@ -173,7 +179,9 @@ class TestPdfsumSinkWrite:
         """summary フィールドに Digest.summary の値が保存される"""
         db_path = tmp_path / "db.sqlite"
         sink = PdfsumSink(db_path, length="standard")
-        digest = Digest(summary="特定の要約テキスト", tokens_in=1, tokens_out=1, latency_ms=100, model="m")
+        digest = Digest(
+            summary="特定の要約テキスト", tokens_in=1, tokens_out=1, latency_ms=100, model="m"
+        )
         item = Item(id=str(pdf_file), payload=pdf_file)
 
         sink.write(digest, item)
@@ -187,7 +195,9 @@ class TestPdfsumSinkWrite:
         """model フィールドに Digest.model の値が保存される"""
         db_path = tmp_path / "db.sqlite"
         sink = PdfsumSink(db_path, length="standard")
-        digest = Digest(summary="s", tokens_in=1, tokens_out=1, latency_ms=100, model="gpt-4o")
+        digest = Digest(
+            summary="s", tokens_in=1, tokens_out=1, latency_ms=100, model="gpt-4o"
+        )
         item = Item(id=str(pdf_file), payload=pdf_file)
 
         sink.write(digest, item)
@@ -195,7 +205,9 @@ class TestPdfsumSinkWrite:
         rows = _fetch_rows(db_path)
         assert rows[0]["model"] == "gpt-4o"
 
-    def test_str_db_path_is_accepted(self, tmp_path: Path, pdf_file: Path, sample_digest: Digest) -> None:
+    def test_str_db_path_is_accepted(
+        self, tmp_path: Path, pdf_file: Path, sample_digest: Digest
+    ) -> None:
         """db_path に文字列を渡しても正常に動作する"""
         db_path = str(tmp_path / "db.sqlite")
         sink = PdfsumSink(db_path, length="standard")

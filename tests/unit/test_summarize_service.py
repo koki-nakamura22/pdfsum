@@ -5,9 +5,9 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import digestkit
 import pytest
 
-import digestkit
 from pdfsum.config.manager import Config, DatabaseConfig, LLMConfig, SummaryConfig
 from pdfsum.errors import ExtractionError, SummarizationError
 from pdfsum.models.summary import PdfsumError, Summary
@@ -53,16 +53,28 @@ class TestSummarizeServicePublicAPI:
         assert result is expected
 
     def test_summarize_accepts_str_path(self, mock_config: Config) -> None:
-        with patch("pdfsum.services.summarize_service.SummaryReader"), \
-             patch("pdfsum.services.summarize_service.run_summarize", return_value=_make_summary()) as mock_run:
+        with (
+            patch("pdfsum.services.summarize_service.SummaryReader"),
+            patch(
+                "pdfsum.services.summarize_service.run_summarize",
+                return_value=_make_summary(),
+            ) as mock_run,
+        ):
             service = SummarizeService(mock_config)
             service.summarize("/path/to/doc.pdf", "standard")
-        mock_run.assert_called_once_with(mock_config, Path("/path/to/doc.pdf"), "standard")
+        mock_run.assert_called_once_with(
+            mock_config, Path("/path/to/doc.pdf"), "standard"
+        )
 
     def test_summarize_accepts_path_obj(self, mock_config: Config) -> None:
         pdf_path = Path("/path/to/doc.pdf")
-        with patch("pdfsum.services.summarize_service.SummaryReader"), \
-             patch("pdfsum.services.summarize_service.run_summarize", return_value=_make_summary()) as mock_run:
+        with (
+            patch("pdfsum.services.summarize_service.SummaryReader"),
+            patch(
+                "pdfsum.services.summarize_service.run_summarize",
+                return_value=_make_summary(),
+            ) as mock_run,
+        ):
             service = SummarizeService(mock_config)
             service.summarize(pdf_path, "standard")
         mock_run.assert_called_once_with(mock_config, pdf_path, "standard")
@@ -257,8 +269,16 @@ class TestRunSummarize:
         mock_reader = MagicMock()
         mock_reader.latest_for_path.return_value = expected
         pdf_path = Path("/tmp/test.pdf")
-        with patch("pdfsum.services.summarize_service.build_digester", return_value=mock_digester), \
-             patch("pdfsum.services.summarize_service.SummaryReader", return_value=mock_reader):
+        with (
+            patch(
+                "pdfsum.services.summarize_service.build_digester",
+                return_value=mock_digester,
+            ),
+            patch(
+                "pdfsum.services.summarize_service.SummaryReader",
+                return_value=mock_reader,
+            ),
+        ):
             result = run_summarize(mock_config, pdf_path, "standard")
         assert result is expected
         mock_digester.run.assert_called_once_with(limit=1, length="standard")
@@ -269,10 +289,15 @@ class TestRunSummarize:
         from digestkit.summarizers import SummarizationError as DigestkitErr
         mock_digester = MagicMock()
         mock_digester.run.side_effect = DigestkitErr("LLM呼び出し失敗")
-        with patch("pdfsum.services.summarize_service.build_digester", return_value=mock_digester), \
-             patch("pdfsum.services.summarize_service.SummaryReader"):
-            with pytest.raises(SummarizationError, match="LLM呼び出し失敗"):
-                run_summarize(mock_config, Path("/tmp/test.pdf"), "standard")
+        with (
+            patch(
+                "pdfsum.services.summarize_service.build_digester",
+                return_value=mock_digester,
+            ),
+            patch("pdfsum.services.summarize_service.SummaryReader"),
+            pytest.raises(SummarizationError, match="LLM呼び出し失敗"),
+        ):
+            run_summarize(mock_config, Path("/tmp/test.pdf"), "standard")
 
     def test_raises_extraction_error_from_extractor_exception(
         self, mock_config: Config
@@ -280,10 +305,15 @@ class TestRunSummarize:
         from digestkit.extractors import ExtractionError as DigestkitExtractionError
         mock_digester = MagicMock()
         mock_digester.run.side_effect = DigestkitExtractionError("PDF corrupt")
-        with patch("pdfsum.services.summarize_service.build_digester", return_value=mock_digester), \
-             patch("pdfsum.services.summarize_service.SummaryReader"):
-            with pytest.raises(ExtractionError, match="PDF corrupt"):
-                run_summarize(mock_config, Path("/tmp/test.pdf"), "standard")
+        with (
+            patch(
+                "pdfsum.services.summarize_service.build_digester",
+                return_value=mock_digester,
+            ),
+            patch("pdfsum.services.summarize_service.SummaryReader"),
+            pytest.raises(ExtractionError, match="PDF corrupt"),
+        ):
+            run_summarize(mock_config, Path("/tmp/test.pdf"), "standard")
 
     def test_raises_extraction_error_on_extract_stage_failure(
         self, mock_config: Config
@@ -295,10 +325,15 @@ class TestRunSummarize:
         failure.error = ValueError("PDF読み取り失敗")
         mock_result.failures = [failure]
         mock_digester.run.return_value = mock_result
-        with patch("pdfsum.services.summarize_service.build_digester", return_value=mock_digester), \
-             patch("pdfsum.services.summarize_service.SummaryReader"):
-            with pytest.raises(ExtractionError):
-                run_summarize(mock_config, Path("/tmp/test.pdf"), "standard")
+        with (
+            patch(
+                "pdfsum.services.summarize_service.build_digester",
+                return_value=mock_digester,
+            ),
+            patch("pdfsum.services.summarize_service.SummaryReader"),
+            pytest.raises(ExtractionError),
+        ):
+            run_summarize(mock_config, Path("/tmp/test.pdf"), "standard")
 
     def test_raises_summarization_error_on_summarize_stage_failure(
         self, mock_config: Config
@@ -310,7 +345,12 @@ class TestRunSummarize:
         failure.error = RuntimeError("LLM応答エラー")
         mock_result.failures = [failure]
         mock_digester.run.return_value = mock_result
-        with patch("pdfsum.services.summarize_service.build_digester", return_value=mock_digester), \
-             patch("pdfsum.services.summarize_service.SummaryReader"):
-            with pytest.raises(SummarizationError):
-                run_summarize(mock_config, Path("/tmp/test.pdf"), "standard")
+        with (
+            patch(
+                "pdfsum.services.summarize_service.build_digester",
+                return_value=mock_digester,
+            ),
+            patch("pdfsum.services.summarize_service.SummaryReader"),
+            pytest.raises(SummarizationError),
+        ):
+            run_summarize(mock_config, Path("/tmp/test.pdf"), "standard")

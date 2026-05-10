@@ -370,9 +370,11 @@ class TestConfigManagerGetApiKey:
         )
         config = manager.load()
 
-        with patch.dict("os.environ", {}, clear=True):
-            with pytest.raises(ConfigError, match="APIキーが設定されていません"):
-                manager.get_api_key(config, "gemini")
+        with (
+            patch.dict("os.environ", {}, clear=True),
+            pytest.raises(ConfigError, match="APIキーが設定されていません"),
+        ):
+            manager.get_api_key(config, "gemini")
 
     def test_get_api_key_raises_config_error_for_unknown_provider(
         self, tmp_path: Path, empty_env: str
