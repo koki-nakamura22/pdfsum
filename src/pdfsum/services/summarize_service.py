@@ -71,6 +71,13 @@ def build_digester(
         extractor=PDFExtractor(),
         summarizer=summarizer,
         sink=PdfsumSink(config.database.path, length=length),
+        # OQ-02 (改訂): digestkit SeenStore を無効化する.
+        # 旧 pdfsum では「summarize は毎回 summaries テーブルに新行を書く」挙動
+        # だったため、SeenStore による「同一内容なら skip」は外部挙動を変えてしまう.
+        # 例えば「summarize → delete → 同じ PDF を再 summarize」したとき、
+        # SeenStore は記録が残っているため write をスキップし、その結果
+        # latest_for_path が空になって PdfsumError になる回帰が発生する.
+        seen_store=None,
         dedup_key=digestkit.content_sha256_key,
     )
 
