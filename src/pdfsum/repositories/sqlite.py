@@ -17,6 +17,10 @@ _CREATE_TABLE = (
 
 def _row_to_summary(row: sqlite3.Row) -> Summary:
     pdf_path = str(row["pdf_path"])
+    # 時刻表記は UTC で統一する. PdfsumSink は datetime.now(UTC) で書き込み、
+    # 読み出しでも tz-aware UTC のまま返す. 旧 pdfsum は datetime.now() (naive local)
+    # で書いていたが、これは将来の多言語/多タイムゾーン対応 (UI 側で利用者の TZ へ
+    # 変換する) を見据えると保存形式は UTC 一択が良いため、敢えて旧挙動には合わせない.
     return Summary(
         id=str(row["id"]),
         pdf_path=pdf_path,

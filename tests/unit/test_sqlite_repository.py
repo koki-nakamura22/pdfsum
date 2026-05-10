@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import UTC
 from pathlib import Path
 
 import pytest
@@ -172,6 +173,29 @@ class TestSummaryReader:
         result = reader.latest_for_path(target_path)
 
         assert result.id == "id1"
+
+    def test_created_at_is_preserved_as_utc(self, tmp_path: Path) -> None:
+        """PdfsumSink が書き込む UTC tz-aware datetime が読み出し時もそのまま
+        UTC のまま返る (将来の多言語/多 TZ 対応で UI 層で変換する方針)."""
+        from datetime import datetime as _dt
+
+        db = tmp_path / "test.db"
+        reader = SummaryReader(db)
+        _insert(
+            db,
+            id="utc-id",
+            pdf_path="/x.pdf",
+            created_at="2026-05-10T12:13:51+00:00",
+        )
+
+        result = reader.list_all()[0]
+
+        # tz-aware で読み戻り、UTC のまま
+        assert result.created_at.tzinfo is not None
+        assert result.created_at.utcoffset() == UTC.utcoffset(None)
+        assert result.created_at == _dt.fromisoformat("2026-05-10T12:13:51+00:00")
+        # 表示用 strftime も UTC 値そのまま (時刻オフセットなし)
+        assert result.created_at.strftime("%H:%M") == "12:13"
 
     def test_init_creates_nested_parent_directory(self, tmp_path: Path) -> None:
         nested_db = tmp_path / "a" / "b" / "c" / "test.db"
