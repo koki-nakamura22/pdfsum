@@ -64,8 +64,12 @@ def _build_service_for_read() -> SummarizeService:
 def cmd_summarize(args: argparse.Namespace) -> int:
     """PDF要約コマンド"""
     display.print_progress(1, 3, "PDFテキスト抽出中...")
+    # --length 未指定時は config.summary.default_length にフォールバック.
+    # config 読み込みのオーバーヘッドを避けたいので create_service が読む config と
+    # 別に再読み込みしている (将来は create_service が config を返す API にしても良い).
+    length = args.length or ConfigManager().load().summary.default_length
     service = _build_service_for_write()
-    summary = service.summarize(args.pdf_path, args.length)
+    summary = service.summarize(args.pdf_path, length)
     display.print_progress(2, 3, "テキスト要約中... 完了")
     display.print_progress(3, 3, "結果を保存中... 完了")
     display.print_summary_result(summary)
@@ -142,8 +146,8 @@ def _build_parser() -> argparse.ArgumentParser:
     summarize_parser.add_argument(
         "--length",
         choices=["short", "standard", "detailed"],
-        default="standard",
-        help="要約の長さ（デフォルト: standard）",
+        default=None,
+        help="要約の長さ（未指定時は config.toml の summary.default_length を使用）",
     )
 
     # list サブコマンド
