@@ -35,8 +35,14 @@ class SummarizationError(PdfsumError):
     """
 
 
-__all__ = ["PdfsumError", "ConfigError", "ExtractionError", "SummarizationError",
-           "format_digestkit_error", "exit_code_for"]
+__all__ = [
+    "ConfigError",
+    "ExtractionError",
+    "PdfsumError",
+    "SummarizationError",
+    "exit_code_for",
+    "format_digestkit_error",
+]
 
 
 def format_digestkit_error(exc: BaseException) -> str:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 from digestkit.types import Digest, Item
@@ -19,7 +19,11 @@ class FakeLLMSummarizer:
     の引数互換を保つため __init__ で全部受け取って保持する。
     """
 
-    DEFAULT_PROMPTS = {"short": "{text}", "standard": "{text}", "detailed": "{text}"}
+    DEFAULT_PROMPTS: ClassVar[dict[str, str]] = {
+        "short": "{text}",
+        "standard": "{text}",
+        "detailed": "{text}",
+    }
 
     def __init__(
         self,

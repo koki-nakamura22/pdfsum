@@ -26,7 +26,7 @@ class TestSingleFileSourceFetch:
         pdf.write_bytes(b"dummy")
         source = SingleFileSource(pdf)
 
-        item = list(source.fetch())[0]
+        item = next(iter(source.fetch()))
 
         assert item.id == str(pdf.resolve())
 
@@ -36,7 +36,7 @@ class TestSingleFileSourceFetch:
         pdf.write_bytes(b"dummy")
         source = SingleFileSource(pdf)
 
-        item = list(source.fetch())[0]
+        item = next(iter(source.fetch()))
 
         assert isinstance(item.payload, Path)
 
@@ -56,7 +56,9 @@ class TestSingleFileSourceFetch:
 
         assert result == []
 
-    def test_relative_path_is_resolved(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_relative_path_is_resolved(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """相対パス入力でも Item.id が絶対パス文字列になる"""
         pdf = tmp_path / "doc.pdf"
         pdf.write_bytes(b"dummy")
@@ -64,7 +66,7 @@ class TestSingleFileSourceFetch:
         monkeypatch.chdir(tmp_path)
         source = SingleFileSource("doc.pdf")
 
-        item = list(source.fetch())[0]
+        item = next(iter(source.fetch()))
 
         assert Path(item.id).is_absolute()
         assert item.id == str(pdf.resolve())

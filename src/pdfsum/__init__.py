@@ -18,13 +18,13 @@ from pdfsum.services.summarize_service import SummarizeService
 __version__ = _pkg_version("pdfsum")
 
 __all__ = [
-    "create_service",
-    "SummarizeService",
-    "Summary",
-    "PdfsumError",
     "ConfigError",
     "ExtractionError",
+    "PdfsumError",
     "SummarizationError",
+    "SummarizeService",
+    "Summary",
+    "create_service",
 ]
 
 

@@ -20,8 +20,8 @@ __all__ = [
     "ConfigError",
     "ExtractionError",
     "PdfsumError",
-    "Summary",
     "SummarizationError",
+    "Summary",
 ]
 
 

@@ -43,6 +43,11 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+# 日本語コードベースの慣習: 全角括弧/カンマ等の "ambiguous unicode" 警告は抑制.
+# RUF001 (string), RUF002 (docstring), RUF003 (comment) はいずれも本来 ASCII 文字に
+# 似た日本語全角文字を検出するもので、ユーザー向けメッセージ・docstring が日本語の
+# 本プロジェクトでは false positive ノイズが多いため ignore する.
+ignore = ["RUF001", "RUF002", "RUF003"]
 
 [tool.pyright]
 include = ["src", "tests"]
