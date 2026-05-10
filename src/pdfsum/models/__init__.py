@@ -1,14 +1,7 @@
 """データモデル"""
 
-from pdfsum.models.summary import (
-    ConfigError,
-    ExtractedDocument,
-    ExtractedPage,
-    ExtractionError,
-    PdfsumError,
-    SummarizationError,
-    Summary,
-)
+from pdfsum.errors import ConfigError, ExtractionError, PdfsumError, SummarizationError
+from pdfsum.models.summary import ExtractedDocument, ExtractedPage, Summary
 
 __all__ = [
     "ConfigError",

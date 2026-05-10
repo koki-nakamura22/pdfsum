@@ -1,28 +1,7 @@
-"""データモデルとカスタム例外クラスの定義"""
+"""データモデル定義"""
 
 from dataclasses import dataclass
 from datetime import datetime
-
-# --- カスタム例外 ---
-
-
-class PdfsumError(Exception):
-    """pdfsum の基底例外クラス"""
-
-
-class ExtractionError(PdfsumError):
-    """PDF テキスト抽出の失敗"""
-
-
-class SummarizationError(PdfsumError):
-    """要約生成の失敗"""
-
-
-class ConfigError(PdfsumError):
-    """設定の読み込み・検証の失敗"""
-
-
-# --- データモデル ---
 
 
 @dataclass
