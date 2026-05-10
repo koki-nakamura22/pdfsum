@@ -10,7 +10,7 @@ from pdfsum.models.summary import Summary
 
 _CREATE_TABLE = (
     "CREATE TABLE IF NOT EXISTS summaries ("
-    "id TEXT PRIMARY KEY, pdf_path TEXT, pdf_hash TEXT, "
+    "id TEXT PRIMARY KEY, pdf_path TEXT, pdf_hash TEXT, page_count INTEGER, "
     "summary TEXT, length TEXT, model TEXT, created_at TEXT)"
 )
 
@@ -22,7 +22,7 @@ def _row_to_summary(row: sqlite3.Row) -> Summary:
         pdf_path=pdf_path,
         pdf_hash=str(row["pdf_hash"]),
         file_name=Path(pdf_path).name,
-        page_count=0,
+        page_count=int(row["page_count"]) if row["page_count"] is not None else 0,
         summary_text=str(row["summary"]),
         summary_length=str(row["length"]),
         model_name=str(row["model"]),

@@ -9,7 +9,7 @@ import pytest
 from pdfsum.errors import PdfsumError
 from pdfsum.repositories.sqlite import SummaryReader
 
-_INSERT = "INSERT INTO summaries VALUES (?, ?, ?, ?, ?, ?, ?)"
+_INSERT = "INSERT INTO summaries VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
 
 
 def _insert(
@@ -18,13 +18,17 @@ def _insert(
     id: str,
     pdf_path: str,
     pdf_hash: str = "abc123",
+    page_count: int = 0,
     summary: str = "テスト要約",
     length: str = "standard",
     model: str = "test-model",
     created_at: str = "2026-01-01T00:00:00+00:00",
 ) -> None:
     conn = sqlite3.connect(str(db_path))
-    conn.execute(_INSERT, (id, pdf_path, pdf_hash, summary, length, model, created_at))
+    conn.execute(
+        _INSERT,
+        (id, pdf_path, pdf_hash, page_count, summary, length, model, created_at),
+    )
     conn.commit()
     conn.close()
 

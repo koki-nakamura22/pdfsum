@@ -46,3 +46,6 @@ tmp/
 vendor/
 .auto-implement/
 .auto-implement-on-docker/
+.auto-implement-run-*.log
+tasks.json
+.claude/scheduled_tasks.lock
