@@ -1,6 +1,5 @@
 """pdfsum.errors のユニットテスト"""
 
-import pytest
 from digestkit import ConfigurationError as DkConfigurationError
 from digestkit import DigestkitError as DkDigestkitError
 from digestkit.sinks import SinkError as DkSinkError
@@ -52,6 +51,7 @@ class TestPublicImportPath:
     """from pdfsum import <例外> が成立 (★公開 I/F 維持)."""
 
     def test_import_from_pdfsum_root(self) -> None:
+        # ImportError が発生しなければパス (公開 I/F 維持確認)
         from pdfsum import (  # noqa: F401
             ConfigError,
             ExtractionError,
@@ -64,84 +64,54 @@ class TestFormatDigestkitError:
     """format_digestkit_error の各分岐を検証."""
 
     def test_configuration_error_includes_setup_message(self) -> None:
-        # Arrange
-        exc = DkConfigurationError("setup failed")
-        # Act
-        result = format_digestkit_error(exc)
-        # Assert
+        result = format_digestkit_error(DkConfigurationError("setup failed"))
         assert "設定または digestkit の組み立てに失敗しました" in result
         assert "setup failed" in result
 
     def test_pdfsum_config_error_uses_same_branch_as_dk_configuration_error(self) -> None:
-        exc = ConfigError("pdfsum config error")
-        result = format_digestkit_error(exc)
+        result = format_digestkit_error(ConfigError("pdfsum config error"))
         assert "設定または digestkit の組み立てに失敗しました" in result
         assert "pdfsum config error" in result
 
     def test_pdfsum_summarization_error_includes_summary_message(self) -> None:
-        # Arrange
-        exc = SummarizationError("summary failed")
-        # Act
-        result = format_digestkit_error(exc)
-        # Assert
+        result = format_digestkit_error(SummarizationError("summary failed"))
         assert "要約に失敗しました" in result
         assert "summary failed" in result
 
     def test_digestkit_summarization_error_includes_summary_message(self) -> None:
-        # Arrange
-        exc = DkSummarizationError("dk summary failed")
-        # Act
-        result = format_digestkit_error(exc)
-        # Assert
+        result = format_digestkit_error(DkSummarizationError("dk summary failed"))
         assert "要約に失敗しました" in result
         assert "dk summary failed" in result
 
     def test_pdfsum_extraction_error_includes_extraction_message(self) -> None:
-        # Arrange
-        exc = ExtractionError("extraction failed")
-        # Act
-        result = format_digestkit_error(exc)
-        # Assert
+        result = format_digestkit_error(ExtractionError("extraction failed"))
         assert "PDF テキスト抽出に失敗しました" in result
         assert "extraction failed" in result
 
     def test_sink_error_includes_db_write_message(self) -> None:
-        # Arrange
-        exc = DkSinkError("sink failed")
-        # Act
-        result = format_digestkit_error(exc)
-        # Assert
+        result = format_digestkit_error(DkSinkError("sink failed"))
         assert "DB への書き込みに失敗しました" in result
         assert "sink failed" in result
 
     def test_unknown_digestkit_error_includes_type_name(self) -> None:
-        # Arrange: use a custom subclass not covered by specific branches
-        exc = _UnknownDkError("unknown error")
-        # Act
-        result = format_digestkit_error(exc)
-        # Assert
+        # _UnknownDkError は特定の digestkit サブクラスにマッチしない汎用スタブ
+        result = format_digestkit_error(_UnknownDkError("unknown error"))
         assert "digestkit 処理失敗" in result
         assert "_UnknownDkError" in result
         assert "unknown error" in result
 
     def test_unrelated_exception_shows_unexpected_failure(self) -> None:
-        # Arrange
-        exc = ValueError("unrelated")
-        # Act
-        result = format_digestkit_error(exc)
-        # Assert
+        result = format_digestkit_error(ValueError("unrelated"))
         assert "予期しない失敗" in result
         assert "ValueError" in result
         assert "unrelated" in result
 
     def test_generic_pdfsum_error_uses_simple_format(self) -> None:
-        exc = PdfsumError("generic pdfsum error")
-        result = format_digestkit_error(exc)
+        result = format_digestkit_error(PdfsumError("generic pdfsum error"))
         assert result == "エラー: generic pdfsum error"
 
     def test_empty_message_is_handled(self) -> None:
-        exc = DkSinkError("")
-        result = format_digestkit_error(exc)
+        result = format_digestkit_error(DkSinkError(""))
         assert "DB への書き込みに失敗しました" in result
 
 
