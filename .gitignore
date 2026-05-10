@@ -43,3 +43,6 @@ docs/
 
 # 一時ファイル
 tmp/
+vendor/
+.auto-implement/
+.auto-implement-on-docker/
