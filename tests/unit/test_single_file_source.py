@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 from pdfsum.digest.source import SingleFileSource
 
 
@@ -54,12 +56,11 @@ class TestSingleFileSourceFetch:
 
         assert result == []
 
-    def test_relative_path_is_resolved(self, tmp_path: Path, monkeypatch: object) -> None:
+    def test_relative_path_is_resolved(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """相対パス入力でも Item.id が絶対パス文字列になる"""
         pdf = tmp_path / "doc.pdf"
         pdf.write_bytes(b"dummy")
         # cwd を tmp_path に変更して相対パスを使えるようにする
-        import os
         monkeypatch.chdir(tmp_path)
         source = SingleFileSource("doc.pdf")
 
