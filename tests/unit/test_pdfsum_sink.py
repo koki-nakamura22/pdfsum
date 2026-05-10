@@ -154,6 +154,58 @@ class TestPdfsumSinkWrite:
         assert len(rows) == 2
         assert rows[0]["id"] != rows[1]["id"]
 
+    def test_pdf_path_field_stores_item_id(
+        self, tmp_path: Path, pdf_file: Path, sample_digest: Digest
+    ) -> None:
+        """pdf_path フィールドに Item.id の値が保存される"""
+        db_path = tmp_path / "db.sqlite"
+        sink = PdfsumSink(db_path, length="standard")
+        item = Item(id=str(pdf_file), payload=pdf_file)
+
+        sink.write(sample_digest, item)
+
+        rows = _fetch_rows(db_path)
+        assert rows[0]["pdf_path"] == str(pdf_file)
+
+    def test_summary_field_stores_digest_summary(
+        self, tmp_path: Path, pdf_file: Path
+    ) -> None:
+        """summary フィールドに Digest.summary の値が保存される"""
+        db_path = tmp_path / "db.sqlite"
+        sink = PdfsumSink(db_path, length="standard")
+        digest = Digest(summary="特定の要約テキスト", tokens_in=1, tokens_out=1, latency_ms=100, model="m")
+        item = Item(id=str(pdf_file), payload=pdf_file)
+
+        sink.write(digest, item)
+
+        rows = _fetch_rows(db_path)
+        assert rows[0]["summary"] == "特定の要約テキスト"
+
+    def test_model_field_stores_digest_model(
+        self, tmp_path: Path, pdf_file: Path
+    ) -> None:
+        """model フィールドに Digest.model の値が保存される"""
+        db_path = tmp_path / "db.sqlite"
+        sink = PdfsumSink(db_path, length="standard")
+        digest = Digest(summary="s", tokens_in=1, tokens_out=1, latency_ms=100, model="gpt-4o")
+        item = Item(id=str(pdf_file), payload=pdf_file)
+
+        sink.write(digest, item)
+
+        rows = _fetch_rows(db_path)
+        assert rows[0]["model"] == "gpt-4o"
+
+    def test_str_db_path_is_accepted(self, tmp_path: Path, pdf_file: Path, sample_digest: Digest) -> None:
+        """db_path に文字列を渡しても正常に動作する"""
+        db_path = str(tmp_path / "db.sqlite")
+        sink = PdfsumSink(db_path, length="standard")
+        item = Item(id=str(pdf_file), payload=pdf_file)
+
+        sink.write(sample_digest, item)
+
+        rows = _fetch_rows(Path(db_path))
+        assert len(rows) == 1
+
     def test_raises_sink_error_on_sqlite_failure(
         self, tmp_path: Path, pdf_file: Path, sample_digest: Digest, monkeypatch: pytest.MonkeyPatch
     ) -> None:
