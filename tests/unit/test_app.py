@@ -9,7 +9,6 @@ import pytest
 from pdfsum.cli.app import (
     _is_full_uuid,
     _is_short_id,
-    _NullEngine,
     _validate_id,
     cmd_delete,
     cmd_list,
@@ -17,7 +16,8 @@ from pdfsum.cli.app import (
     cmd_summarize,
     main,
 )
-from pdfsum.models.summary import PdfsumError, Summary
+from pdfsum.errors import PdfsumError
+from pdfsum.models.summary import Summary
 
 
 def _make_summary(
@@ -97,7 +97,7 @@ class TestValidateId:
 class TestCmdSummarize:
     """cmd_summarize のテスト"""
 
-    @patch("pdfsum.cli.app._build_service_for_summarize")
+    @patch("pdfsum.cli.app._build_service_for_write")
     def test_returns_zero_on_success(self, mock_build: Mock) -> None:
         """要約成功時に終了コード0を返す"""
         mock_service = Mock()
@@ -107,7 +107,7 @@ class TestCmdSummarize:
         args = Namespace(pdf_path="/test.pdf", length="standard")
         assert cmd_summarize(args) == 0
 
-    @patch("pdfsum.cli.app._build_service_for_summarize")
+    @patch("pdfsum.cli.app._build_service_for_write")
     def test_calls_service_with_correct_args(
         self, mock_build: Mock
     ) -> None:
@@ -120,11 +120,22 @@ class TestCmdSummarize:
         cmd_summarize(args)
         mock_service.summarize.assert_called_once_with("/test.pdf", "short")
 
+    @patch("pdfsum.cli.app._build_service_for_write")
+    def test_propagates_pdfsum_error(self, mock_build: Mock) -> None:
+        """PdfsumError を伝播させる"""
+        mock_service = Mock()
+        mock_build.return_value = mock_service
+        mock_service.summarize.side_effect = PdfsumError("要約失敗")
+
+        args = Namespace(pdf_path="/test.pdf", length="standard")
+        with pytest.raises(PdfsumError, match="要約失敗"):
+            cmd_summarize(args)
+
 
 class TestCmdList:
     """cmd_list のテスト"""
 
-    @patch("pdfsum.cli.app._build_service_for_readonly")
+    @patch("pdfsum.cli.app._build_service_for_read")
     def test_returns_zero(self, mock_build: Mock) -> None:
         """一覧表示で終了コード0を返す"""
         mock_service = Mock()
@@ -134,11 +145,24 @@ class TestCmdList:
         args = Namespace(full_id=False)
         assert cmd_list(args) == 0
 
+    @patch("pdfsum.cli.app._build_service_for_read")
+    def test_passes_full_id_flag_to_display(self, mock_build: Mock) -> None:
+        """full_id フラグを display に渡す"""
+        mock_service = Mock()
+        mock_build.return_value = mock_service
+        summaries = [_make_summary()]
+        mock_service.list_summaries.return_value = summaries
+
+        with patch("pdfsum.cli.app.display.print_summary_list") as mock_display:
+            args = Namespace(full_id=True)
+            cmd_list(args)
+            mock_display.assert_called_once_with(summaries, full_id=True)
+
 
 class TestCmdShow:
     """cmd_show のテスト"""
 
-    @patch("pdfsum.cli.app._build_service_for_readonly")
+    @patch("pdfsum.cli.app._build_service_for_read")
     def test_full_uuid_found_returns_zero(self, mock_build: Mock) -> None:
         """完全UUID指定で見つかった場合に終了コード0を返す"""
         mock_service = Mock()
@@ -150,7 +174,7 @@ class TestCmdShow:
         )
         assert cmd_show(args) == 0
 
-    @patch("pdfsum.cli.app._build_service_for_readonly")
+    @patch("pdfsum.cli.app._build_service_for_read")
     def test_full_uuid_not_found_raises_error(
         self, mock_build: Mock
     ) -> None:
@@ -165,7 +189,7 @@ class TestCmdShow:
         with pytest.raises(PdfsumError, match="要約が見つかりません"):
             cmd_show(args)
 
-    @patch("pdfsum.cli.app._build_service_for_readonly")
+    @patch("pdfsum.cli.app._build_service_for_read")
     def test_short_id_calls_get_by_prefix(
         self, mock_build: Mock
     ) -> None:
@@ -190,7 +214,7 @@ class TestCmdShow:
 class TestCmdDelete:
     """cmd_delete のテスト"""
 
-    @patch("pdfsum.cli.app._build_service_for_readonly")
+    @patch("pdfsum.cli.app._build_service_for_read")
     def test_full_uuid_found_returns_zero(self, mock_build: Mock) -> None:
         """完全UUID指定で削除成功時に終了コード0を返す"""
         mock_service = Mock()
@@ -202,7 +226,7 @@ class TestCmdDelete:
         )
         assert cmd_delete(args) == 0
 
-    @patch("pdfsum.cli.app._build_service_for_readonly")
+    @patch("pdfsum.cli.app._build_service_for_read")
     def test_full_uuid_not_found_raises_error(
         self, mock_build: Mock
     ) -> None:
@@ -217,7 +241,7 @@ class TestCmdDelete:
         with pytest.raises(PdfsumError, match="要約が見つかりません"):
             cmd_delete(args)
 
-    @patch("pdfsum.cli.app._build_service_for_readonly")
+    @patch("pdfsum.cli.app._build_service_for_read")
     def test_short_id_calls_resolve_and_delete(
         self, mock_build: Mock
     ) -> None:
@@ -236,26 +260,6 @@ class TestCmdDelete:
             cmd_delete(args)
 
 
-class TestNullEngine:
-    """_NullEngine のテスト"""
-
-    def test_summarize_raises_pdfsum_error(self) -> None:
-        """summarize()はPdfsumErrorを送出する"""
-        engine = _NullEngine()
-        with pytest.raises(PdfsumError, match="要約エンジンが初期化されていません"):
-            engine.summarize("テスト", "standard")
-
-    def test_get_model_name_returns_empty_string(self) -> None:
-        """get_model_name()は空文字を返す"""
-        engine = _NullEngine()
-        assert engine.get_model_name() == ""
-
-    def test_get_max_input_tokens_returns_zero(self) -> None:
-        """get_max_input_tokens()は0を返す"""
-        engine = _NullEngine()
-        assert engine.get_max_input_tokens() == 0
-
-
 class TestMainFunction:
     """main関数のテスト"""
 
@@ -263,7 +267,7 @@ class TestMainFunction:
         """コマンド未指定で終了コード2を返す"""
         assert main([]) == 2
 
-    @patch("pdfsum.cli.app._build_service_for_readonly")
+    @patch("pdfsum.cli.app._build_service_for_read")
     def test_list_command_returns_zero(self, mock_build: Mock) -> None:
         """list コマンドで終了コード0を返す"""
         mock_service = Mock()
@@ -272,7 +276,7 @@ class TestMainFunction:
 
         assert main(["list"]) == 0
 
-    @patch("pdfsum.cli.app._build_service_for_readonly")
+    @patch("pdfsum.cli.app._build_service_for_read")
     def test_catches_pdfsum_error_returns_exit_code_1(
         self, mock_build: Mock
     ) -> None:
@@ -287,7 +291,7 @@ class TestMainFunction:
         """show で無効なID指定時に終了コード1を返す"""
         assert main(["show", "invalid"]) == 1
 
-    @patch("pdfsum.cli.app._build_service_for_readonly")
+    @patch("pdfsum.cli.app._build_service_for_read")
     def test_catches_file_not_found_error_returns_exit_code_1(
         self, mock_build: Mock
     ) -> None:
@@ -300,7 +304,7 @@ class TestMainFunction:
 
         assert main(["list"]) == 1
 
-    @patch("pdfsum.cli.app._build_service_for_readonly")
+    @patch("pdfsum.cli.app._build_service_for_read")
     def test_catches_keyboard_interrupt_returns_exit_code_130(
         self, mock_build: Mock
     ) -> None:
