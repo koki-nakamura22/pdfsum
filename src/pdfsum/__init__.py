@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from importlib.metadata import version as _pkg_version
+from typing import TYPE_CHECKING
 
 from pdfsum.models.summary import (
     ConfigError,
@@ -12,7 +13,9 @@ from pdfsum.models.summary import (
     SummarizationError,
     Summary,
 )
-from pdfsum.services.summarize_service import SummarizeService
+
+if TYPE_CHECKING:
+    from pdfsum.services.summarize_service import SummarizeService
 
 __version__ = _pkg_version("pdfsum")
 
@@ -25,6 +28,13 @@ __all__ = [
     "ExtractionError",
     "SummarizationError",
 ]
+
+
+def __getattr__(name: str) -> object:
+    if name == "SummarizeService":
+        from pdfsum.services.summarize_service import SummarizeService
+        return SummarizeService
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def create_service(
