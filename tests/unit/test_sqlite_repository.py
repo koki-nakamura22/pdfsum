@@ -62,6 +62,8 @@ class TestSummaryReader:
         assert result.summary_text == "要約テキスト"
         assert result.summary_length == "short"
         assert result.model_name == "m1"
+        assert result.file_name == "a.pdf"
+        assert result.page_count == 0
 
     def test_get_by_prefix_single_match(self, tmp_path: Path) -> None:
         db = tmp_path / "test.db"
@@ -109,6 +111,22 @@ class TestSummaryReader:
 
         assert reader.get("abcd1234-0000-0000-0000-000000000001") is None
 
+    def test_resolve_and_delete_raises_when_no_match(self, tmp_path: Path) -> None:
+        reader = SummaryReader(tmp_path / "test.db")
+        with pytest.raises(PdfsumError):
+            reader.resolve_and_delete("xxxxxxxx")
+
+    def test_resolve_and_delete_raises_when_delete_fails(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        db = tmp_path / "test.db"
+        reader = SummaryReader(db)
+        _insert(db, id="abcd1234-0000-0000-0000-000000000001", pdf_path="/a.pdf")
+        monkeypatch.setattr(reader, "delete", lambda _: False)
+
+        with pytest.raises(PdfsumError):
+            reader.resolve_and_delete("abcd1234")
+
     def test_latest_for_path_returns_newest(self, tmp_path: Path) -> None:
         db = tmp_path / "test.db"
         reader = SummaryReader(db)
@@ -136,4 +154,22 @@ class TestSummaryReader:
         monkeypatch.chdir(tmp_path)
         result = reader.latest_for_path("doc.pdf")
 
+        assert result.id == "id1"
         assert result.pdf_path == abs_path
+
+    def test_latest_for_path_ignores_other_paths(self, tmp_path: Path) -> None:
+        db = tmp_path / "test.db"
+        reader = SummaryReader(db)
+        target_path = str((tmp_path / "target.pdf").resolve())
+        other_path = str((tmp_path / "other.pdf").resolve())
+        _insert(db, id="id1", pdf_path=target_path, created_at="2026-01-01T00:00:00+00:00")
+        _insert(db, id="id2", pdf_path=other_path, created_at="2026-02-01T00:00:00+00:00")
+
+        result = reader.latest_for_path(target_path)
+
+        assert result.id == "id1"
+
+    def test_init_creates_nested_parent_directory(self, tmp_path: Path) -> None:
+        nested_db = tmp_path / "a" / "b" / "c" / "test.db"
+        SummaryReader(nested_db)
+        assert nested_db.exists()
