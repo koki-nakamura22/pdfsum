@@ -59,6 +59,7 @@ class SummaryConfig:
 
     default_length: str = DEFAULT_SUMMARY_LENGTH
     extra_instructions: str = ""
+    chunked: bool = False
     prompt_short: str = ""
     prompt_standard: str = ""
     prompt_detailed: str = ""
@@ -164,6 +165,8 @@ class ConfigManager:
         model_str = llm_data.get("model", DEFAULT_MODEL)
         length_str = summary_data.get("default_length", DEFAULT_SUMMARY_LENGTH)
         extra_instructions = summary_data.get("extra_instructions", "")
+        chunked_val = summary_data.get("chunked", False)
+        chunked = bool(chunked_val) if isinstance(chunked_val, bool) else False
         prompt_short = summary_data.get("prompt_short", "")
         prompt_standard = summary_data.get("prompt_standard", "")
         prompt_detailed = summary_data.get("prompt_detailed", "")
@@ -178,6 +181,7 @@ class ConfigManager:
             summary=SummaryConfig(
                 default_length=str(length_str),
                 extra_instructions=str(extra_instructions),
+                chunked=chunked,
                 prompt_short=str(prompt_short),
                 prompt_standard=str(prompt_standard),
                 prompt_detailed=str(prompt_detailed),
