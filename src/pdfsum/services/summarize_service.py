@@ -82,11 +82,22 @@ def build_digester(
     summarizer_cls = ChunkedLLMSummarizer if config.summary.chunked else LLMSummarizer
     base_prompts = _resolve_prompts(config)
     prompts = _build_prompts(base_prompts, config.summary.extra_instructions)
+    # ChunkedLLMSummarizer 限定の追加引数を組み立てる:
+    # digestkit 0.1.0 のバグ回避: ChunkedLLMSummarizer はモデルの context window
+    # 算出に litellm の `max_tokens` (= 出力上限) を使ってしまっており、
+    # 例えば gemini-2.5-flash では 65,535 となり閾値が ~57k tokens に狭まる.
+    # 実際の入力 context window (`max_input_tokens`) は 1,048,576 で旧 pdfsum
+    # も `max_input_tokens * 0.8 ≒ 839k` を閾値にしていた. 同等の挙動を再現
+    # するため `chunk_size` を明示指定して digestkit 内部の自動算出を上書きする.
+    extra_kwargs: dict[str, int] = {}
+    if summarizer_cls is ChunkedLLMSummarizer:
+        extra_kwargs["chunk_size"] = _resolve_chunk_size(config.llm.provider, config.llm.model)
     summarizer = summarizer_cls(
         provider=config.llm.provider,
         model=config.llm.model,
         prompts=prompts,
         default_length=length,
+        **extra_kwargs,
     )
     return digestkit.Digester(
         source=SingleFileSource(pdf_path),
@@ -124,6 +135,28 @@ def run_summarize(
             raise ExtractionError(str(cause)) from cause
         raise SummarizationError(str(cause)) from cause
     return SummaryReader(config.database.path).latest_for_path(pdf_path)
+
+
+def _resolve_chunk_size(provider: str, model: str) -> int:
+    """ChunkedLLMSummarizer に渡す chunk_size を litellm から取得.
+
+    digestkit 0.1.0 が `max_tokens` (出力上限) を取り違えている問題を回避するため、
+    litellm `get_model_info` から `max_input_tokens` を直接取得し、
+    旧 pdfsum と同じ `max_input_tokens * 0.8` を閾値とする (旧 ChunkedSummarizer の
+    TOKEN_SAFETY_MARGIN を踏襲).
+
+    取得失敗時は安全側に倒して 32k tokens (典型的な小型モデル相当) を返す.
+    """
+    try:
+        import litellm
+
+        info = litellm.get_model_info(f"{provider}/{model}")
+        max_input = int(info.get("max_input_tokens") or 0)
+        if max_input > 0:
+            return int(max_input * 0.8)
+    except Exception:
+        pass
+    return 32_000
 
 
 def _resolve_prompts(config: Config) -> dict[str, str]:

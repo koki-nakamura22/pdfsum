@@ -69,7 +69,13 @@ class SummaryConfig:
 
     default_length: str = DEFAULT_SUMMARY_LENGTH
     extra_instructions: str = ""
-    chunked: bool = False
+    # 旧 pdfsum は SummarizeService 内で常に ChunkedSummarizer を経由しており、
+    # 短文は単発呼び出しに自動 fallback、長文は自動でチャンク分割していた.
+    # digestkit.ChunkedLLMSummarizer も同じ自動 fallback 仕様を持つため、
+    # デフォルトを True にして旧挙動 (利用者がチャンキングを意識せず長文 PDF も
+    # 処理可能) と一致させる。False を明示すると LLMSummarizer (単発) を使うが、
+    # context window 超過で LLM プロバイダ側のレート制限/エラーに当たり得る.
+    chunked: bool = True
     prompt_short: str = ""
     prompt_standard: str = ""
     prompt_detailed: str = ""
@@ -157,8 +163,8 @@ class ConfigManager:
         model_str: str = str(llm_data.get("model", DEFAULT_MODEL))
         length_str: str = str(summary_data.get("default_length", DEFAULT_SUMMARY_LENGTH))
         extra_instructions: str = str(summary_data.get("extra_instructions", ""))
-        chunked_val = summary_data.get("chunked", False)
-        chunked: bool = bool(chunked_val) if isinstance(chunked_val, bool) else False
+        chunked_val = summary_data.get("chunked", True)
+        chunked: bool = bool(chunked_val) if isinstance(chunked_val, bool) else True
         prompt_short: str = str(summary_data.get("prompt_short", ""))
         prompt_standard: str = str(summary_data.get("prompt_standard", ""))
         prompt_detailed: str = str(summary_data.get("prompt_detailed", ""))
