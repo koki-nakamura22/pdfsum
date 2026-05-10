@@ -1,5 +1,7 @@
 # pdfsum
 
+[![CI](https://github.com/koki-nakamura22/pdfsum/actions/workflows/ci.yml/badge.svg)](https://github.com/koki-nakamura22/pdfsum/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/) [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+
 PDFドキュメントをLLM APIで要約するCLIツール。
 
 ## 特徴
@@ -9,19 +11,45 @@ PDFドキュメントをLLM APIで要約するCLIツール。
 - **キャッシュ** - PDFのSHA-256ハッシュで同一ファイルの再処理をスキップ
 - **要約の長さ指定** - short / standard / detailed の3段階
 - **SQLiteで永続化** - 要約結果の保存・一覧・表示・削除
+- 内部実装は [digestkit](https://github.com/koki-nakamura22/inboxkit/tree/main/packages/digestkit) を採用
+
+## 依存パッケージ
+
+| パッケージ | 役割 |
+|------------|------|
+| [digestkit](https://github.com/koki-nakamura22/inboxkit/tree/main/packages/digestkit) | PDF抽出 / LLM要約 / 永続化パイプライン |
+| platformdirs | OS標準の設定・データディレクトリ解決 |
+| python-dotenv | `.env` からの環境変数読み込み |
 
 ## 必要環境
 
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/)（推奨）
 
-## インストール
+## インストール (当面)
+
+digestkit は現在 PyPI 未公開のため、`inboxkit` リポジトリから wheel をビルドして `vendor/` に置いてから `uv sync` します。
 
 ```bash
-git clone git@github.com:koki-nakamura22/pdfsum.git
-cd pdfsum
-uv sync
+# 1. inboxkit をチェックアウト (pdfsum と同階層)
+git clone https://github.com/koki-nakamura22/inboxkit.git ../inboxkit
+
+# 2. digestkit の wheel をビルドして pdfsum/vendor/ に同梱
+(cd ../inboxkit/packages/digestkit && uv build --wheel)
+mkdir -p vendor && cp ../inboxkit/dist/digestkit-0.1.0-py3-none-any.whl vendor/
+
+# 3. pdfsum をインストール
+uv sync   # tool.uv.sources で vendor/digestkit-0.1.0-*.whl を参照
 ```
+
+`pyproject.toml` の `tool.uv.sources` 設定（既に含まれています）:
+
+```toml
+[tool.uv.sources]
+digestkit = { path = "vendor/digestkit-0.1.0-py3-none-any.whl" }
+```
+
+PyPI 公開後は通常の `uv add pdfsum` / `pip install pdfsum` で済む予定です。
 
 ## セットアップ
 
@@ -159,6 +187,16 @@ service = create_service(
 | OpenAI    | gpt-4.1 | 1,047,576 | 32,768 | |
 | OpenAI    | gpt-4.1-mini | 1,047,576 | 32,768 | ✅ |
 | OpenAI    | gpt-4.1-nano | 1,047,576 | 32,768 | |
+
+## 内部実装
+
+pdfsum の内部処理 (PDF テキスト抽出 / LLM 要約 / SQLite 保存) は [digestkit](https://github.com/koki-nakamura22/inboxkit/tree/main/packages/digestkit) のパイプライン (`Source → Extractor → Summarizer → Sink`) で構成されています。
+
+```
+SingleFileSource → digestkit.PDFExtractor → LLMSummarizer/ChunkedLLMSummarizer → PdfsumSink → SQLite (summaries テーブル)
+```
+
+判断根拠は `docs/adr/002-adopt-digestkit-internally.md` (MADR v3 形式、ローカルのみ — リポジトリには公開されません) を参照してください。
 
 ## 開発
 
