@@ -178,24 +178,52 @@ class TestBuildDigester:
             build_digester(mock_config, Path("/tmp/test.pdf"), "standard")
         mock_cls.assert_called_once()
 
-    def test_passes_default_prompts_when_no_extra(self, mock_config: Config) -> None:
+    def test_passes_pdfsum_default_prompts_when_no_extra(self, mock_config: Config) -> None:
+        """config に prompt_* が空、extra_instructions も空なら pdfsum 旧版 DEFAULT_PROMPTS を渡す.
+
+        digestkit の DEFAULT_PROMPTS は使わない (旧 pdfsum との挙動互換のため).
+        """
         mock_config.summary.extra_instructions = ""
-        default_prompts = {"standard": "summarize {text}"}
+        mock_config.summary.prompt_short = ""
+        mock_config.summary.prompt_standard = ""
+        mock_config.summary.prompt_detailed = ""
         with patch("pdfsum.services.summarize_service.LLMSummarizer") as mock_cls, \
              patch("digestkit.Digester"), \
              patch("pdfsum.services.summarize_service.PdfsumSink"):
-            mock_cls.DEFAULT_PROMPTS = default_prompts
             build_digester(mock_config, Path("/tmp/test.pdf"), "standard")
         call_kwargs = mock_cls.call_args.kwargs
-        assert call_kwargs["prompts"] == default_prompts
+        prompts = call_kwargs["prompts"]
+        # 旧 pdfsum の特徴的な文言が prompts に含まれる
+        assert "箇条書き" in prompts["short"]
+        assert "300〜500文字" in prompts["short"]
+        assert "1000〜2000文字" in prompts["standard"]
+        assert "章・セクションごと" in prompts["detailed"]
+        # digestkit DEFAULT_PROMPTS の文言は含まれない
+        assert "3 行以内" not in prompts["short"]
+
+    def test_uses_config_prompts_when_specified(self, mock_config: Config) -> None:
+        """config.toml の prompt_short 等が指定されていればそれを優先する."""
+        mock_config.summary.extra_instructions = ""
+        mock_config.summary.prompt_short = "短く要約 {text}"
+        mock_config.summary.prompt_standard = "標準要約 {text}"
+        mock_config.summary.prompt_detailed = ""  # 未指定 → デフォルト
+        with patch("pdfsum.services.summarize_service.LLMSummarizer") as mock_cls, \
+             patch("digestkit.Digester"), \
+             patch("pdfsum.services.summarize_service.PdfsumSink"):
+            build_digester(mock_config, Path("/tmp/test.pdf"), "standard")
+        prompts = mock_cls.call_args.kwargs["prompts"]
+        assert prompts["short"] == "短く要約 {text}"
+        assert prompts["standard"] == "標準要約 {text}"
+        assert "章・セクションごと" in prompts["detailed"]  # 未指定なのでデフォルト
 
     def test_appends_extra_instructions_to_prompts(self, mock_config: Config) -> None:
         mock_config.summary.extra_instructions = "日本語で"
-        default_prompts = {"standard": "summarize {text}"}
+        mock_config.summary.prompt_short = ""
+        mock_config.summary.prompt_standard = ""
+        mock_config.summary.prompt_detailed = ""
         with patch("pdfsum.services.summarize_service.LLMSummarizer") as mock_cls, \
              patch("digestkit.Digester"), \
              patch("pdfsum.services.summarize_service.PdfsumSink"):
-            mock_cls.DEFAULT_PROMPTS = default_prompts
             build_digester(mock_config, Path("/tmp/test.pdf"), "standard")
         call_kwargs = mock_cls.call_args.kwargs
         assert "日本語で" in call_kwargs["prompts"]["standard"]

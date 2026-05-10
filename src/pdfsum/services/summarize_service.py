@@ -19,6 +19,27 @@ from pdfsum.errors import ExtractionError, SummarizationError
 from pdfsum.models.summary import Summary
 from pdfsum.repositories.sqlite import SummaryReader
 
+# pdfsum 旧版 DEFAULT_PROMPTS (digestkit 全面置換前の挙動を維持するため、
+# digestkit の DEFAULT_PROMPTS は使わず pdfsum 独自テンプレートを保持する).
+# `{text}` は digestkit の prompts mapping が要求する placeholder。
+_PDFSUM_DEFAULT_PROMPTS: dict[str, str] = {
+    "short": (
+        "以下のテキストの要点のみを箇条書きで簡潔に要約してください。"
+        "300〜500文字程度で、最も重要なポイントだけを抽出してください。"
+        "日本語で出力してください。\n\n{text}"
+    ),
+    "standard": (
+        "以下のテキストの要点と重要な詳細を含めて要約してください。"
+        "1000〜2000文字程度で、主要な論点と補足情報を整理してください。"
+        "日本語で出力してください。\n\n{text}"
+    ),
+    "detailed": (
+        "以下のテキストを章・セクションごとに概要と要点を含めて詳細に要約してください。"
+        "3000〜5000文字程度で、構造を保ちながら網羅的に要約してください。"
+        "日本語で出力してください。\n\n{text}"
+    ),
+}
+
 
 class SummarizeService:
     """pdfsum 公開 API.
@@ -59,7 +80,8 @@ def build_digester(
     length: str,
 ) -> digestkit.Digester:
     summarizer_cls = ChunkedLLMSummarizer if config.summary.chunked else LLMSummarizer
-    prompts = _build_prompts(summarizer_cls.DEFAULT_PROMPTS, config.summary.extra_instructions)
+    base_prompts = _resolve_prompts(config)
+    prompts = _build_prompts(base_prompts, config.summary.extra_instructions)
     summarizer = summarizer_cls(
         provider=config.llm.provider,
         model=config.llm.model,
@@ -102,6 +124,20 @@ def run_summarize(
             raise ExtractionError(str(cause)) from cause
         raise SummarizationError(str(cause)) from cause
     return SummaryReader(config.database.path).latest_for_path(pdf_path)
+
+
+def _resolve_prompts(config: Config) -> dict[str, str]:
+    """config.toml の prompt_short / prompt_standard / prompt_detailed を反映.
+
+    各キーが空文字なら pdfsum 旧版 DEFAULT_PROMPTS を使う (旧挙動と一致).
+    digestkit の DEFAULT_PROMPTS は使わない (旧 pdfsum とプロンプト文言が異なり、
+    要約結果の傾向が変わってしまうため).
+    """
+    return {
+        "short": config.summary.prompt_short or _PDFSUM_DEFAULT_PROMPTS["short"],
+        "standard": config.summary.prompt_standard or _PDFSUM_DEFAULT_PROMPTS["standard"],
+        "detailed": config.summary.prompt_detailed or _PDFSUM_DEFAULT_PROMPTS["detailed"],
+    }
 
 
 def _build_prompts(default: dict[str, str], extra: str) -> dict[str, str]:

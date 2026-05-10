@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import re
 import sys
 
@@ -189,6 +190,19 @@ def main(args: list[str] | None = None) -> int:
     Returns:
         終了コード（0: 成功, 1: エラー, 2: 引数エラー）
     """
+    # digestkit が INFO レベルで出力するログ (例: "llm_call_completed") を
+    # CLI の出力に混ぜないため WARNING に抑制する。Python ライブラリとして
+    # 利用される場合 (create_service / SummarizeService) はロガー設定を
+    # 利用者側に委ねたいので、本関数 (CLI エントリ) のみで設定する。
+    #
+    # digestkit.logging.get_logger は子ロガー (digestkit.summarizers.llm 等) に
+    # 直接 setLevel(INFO) するため、親 "digestkit" だけ WARNING にしても
+    # 効かない。import 済み (= main() 到達時点) の digestkit 系ロガーを
+    # 全て走査して WARNING に上書きする。
+    for _name in list(logging.Logger.manager.loggerDict):
+        if _name.startswith("digestkit"):
+            logging.getLogger(_name).setLevel(logging.WARNING)
+
     parser = _build_parser()
     parsed = parser.parse_args(args)
 
