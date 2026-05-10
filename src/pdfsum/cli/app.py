@@ -6,10 +6,12 @@ import argparse
 import re
 import sys
 
+from digestkit import DigestkitError
+
 from pdfsum import __version__, create_service
 from pdfsum.cli import display
 from pdfsum.config.manager import ConfigManager
-from pdfsum.errors import PdfsumError
+from pdfsum.errors import PdfsumError, exit_code_for, format_digestkit_error
 from pdfsum.services.summarize_service import SummarizeService
 
 
@@ -210,7 +212,10 @@ def main(args: list[str] | None = None) -> int:
         return handler(parsed)
     except PdfsumError as e:
         display.print_error(str(e))
-        return 1
+        return exit_code_for(e)
+    except DigestkitError as e:
+        display.print_error(format_digestkit_error(e))
+        return exit_code_for(e)
     except FileNotFoundError as e:
         display.print_error(str(e))
         return 1

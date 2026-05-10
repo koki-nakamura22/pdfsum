@@ -9,7 +9,7 @@ from typing import Any, cast
 from dotenv import load_dotenv
 from platformdirs import user_config_dir, user_data_dir
 
-from pdfsum.models.summary import ConfigError
+from pdfsum.errors import ConfigError
 
 
 def get_default_config_path() -> str:
