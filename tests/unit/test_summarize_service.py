@@ -94,6 +94,33 @@ class TestSummarizeServicePublicAPI:
             with pytest.raises(PdfsumError, match="複数の要約が一致しました"):
                 service.get_summary_by_prefix("abc")
 
+    def test_get_summary_by_prefix_raises_when_no_match(self, mock_config: Config) -> None:
+        mock_reader = MagicMock()
+        mock_reader.get_by_prefix.side_effect = PdfsumError("要約が見つかりません")
+        with patch("pdfsum.services.summarize_service.SummaryReader", return_value=mock_reader):
+            service = SummarizeService(mock_config)
+            with pytest.raises(PdfsumError, match="要約が見つかりません"):
+                service.get_summary_by_prefix("nonexistent")
+
+    def test_get_summary_returns_summary_when_found(self, mock_config: Config) -> None:
+        expected = _make_summary()
+        mock_reader = MagicMock()
+        mock_reader.get.return_value = expected
+        with patch("pdfsum.services.summarize_service.SummaryReader", return_value=mock_reader):
+            service = SummarizeService(mock_config)
+            result = service.get_summary("test-uuid")
+        assert result is expected
+        mock_reader.get.assert_called_once_with("test-uuid")
+
+    def test_get_summary_by_prefix_returns_single_match(self, mock_config: Config) -> None:
+        expected = _make_summary()
+        mock_reader = MagicMock()
+        mock_reader.get_by_prefix.return_value = expected
+        with patch("pdfsum.services.summarize_service.SummaryReader", return_value=mock_reader):
+            service = SummarizeService(mock_config)
+            result = service.get_summary_by_prefix("test-")
+        assert result is expected
+
     def test_delete_summary_returns_bool(self, mock_config: Config) -> None:
         mock_reader = MagicMock()
         mock_reader.delete.return_value = True
@@ -102,6 +129,34 @@ class TestSummarizeServicePublicAPI:
             result = service.delete_summary("test-uuid")
         assert result is True
         mock_reader.delete.assert_called_once_with("test-uuid")
+
+    def test_delete_summary_returns_false_when_not_found(self, mock_config: Config) -> None:
+        mock_reader = MagicMock()
+        mock_reader.delete.return_value = False
+        with patch("pdfsum.services.summarize_service.SummaryReader", return_value=mock_reader):
+            service = SummarizeService(mock_config)
+            result = service.delete_summary("nonexistent-uuid")
+        assert result is False
+
+    def test_resolve_and_delete_resolves_prefix_then_deletes(self, mock_config: Config) -> None:
+        target = _make_summary("full-uuid-here")
+        mock_reader = MagicMock()
+        mock_reader.get_by_prefix.return_value = target
+        mock_reader.delete.return_value = True
+        with patch("pdfsum.services.summarize_service.SummaryReader", return_value=mock_reader):
+            service = SummarizeService(mock_config)
+            result = service.resolve_and_delete("full-uui")
+        assert result is True
+        mock_reader.get_by_prefix.assert_called_once_with("full-uui")
+        mock_reader.delete.assert_called_once_with("full-uuid-here")
+
+    def test_resolve_and_delete_propagates_not_found_error(self, mock_config: Config) -> None:
+        mock_reader = MagicMock()
+        mock_reader.get_by_prefix.side_effect = PdfsumError("要約が見つかりません")
+        with patch("pdfsum.services.summarize_service.SummaryReader", return_value=mock_reader):
+            service = SummarizeService(mock_config)
+            with pytest.raises(PdfsumError, match="要約が見つかりません"):
+                service.resolve_and_delete("xxxxxxxx")
 
 
 class TestBuildDigester:
@@ -165,9 +220,7 @@ class TestBuildDigester:
 
 
 class TestRunSummarize:
-    def test_returns_summary_on_success(
-        self, mock_config: Config, tmp_path: pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_summary_on_success(self, mock_config: Config) -> None:
         expected = _make_summary()
         mock_digester = MagicMock()
         mock_result = MagicMock()
@@ -193,7 +246,18 @@ class TestRunSummarize:
             with pytest.raises(SummarizationError, match="LLM呼び出し失敗"):
                 run_summarize(mock_config, Path("/tmp/test.pdf"), "standard")
 
-    def test_raises_extraction_error_on_extract_failure(
+    def test_raises_extraction_error_from_extractor_exception(
+        self, mock_config: Config
+    ) -> None:
+        from digestkit.extractors import ExtractionError as DigestkitExtractionError
+        mock_digester = MagicMock()
+        mock_digester.run.side_effect = DigestkitExtractionError("PDF corrupt")
+        with patch("pdfsum.services.summarize_service.build_digester", return_value=mock_digester), \
+             patch("pdfsum.services.summarize_service.SummaryReader"):
+            with pytest.raises(ExtractionError, match="PDF corrupt"):
+                run_summarize(mock_config, Path("/tmp/test.pdf"), "standard")
+
+    def test_raises_extraction_error_on_extract_stage_failure(
         self, mock_config: Config
     ) -> None:
         mock_digester = MagicMock()
@@ -206,4 +270,19 @@ class TestRunSummarize:
         with patch("pdfsum.services.summarize_service.build_digester", return_value=mock_digester), \
              patch("pdfsum.services.summarize_service.SummaryReader"):
             with pytest.raises(ExtractionError):
+                run_summarize(mock_config, Path("/tmp/test.pdf"), "standard")
+
+    def test_raises_summarization_error_on_summarize_stage_failure(
+        self, mock_config: Config
+    ) -> None:
+        mock_digester = MagicMock()
+        mock_result = MagicMock()
+        failure = MagicMock()
+        failure.stage = "summarize"
+        failure.error = RuntimeError("LLM応答エラー")
+        mock_result.failures = [failure]
+        mock_digester.run.return_value = mock_result
+        with patch("pdfsum.services.summarize_service.build_digester", return_value=mock_digester), \
+             patch("pdfsum.services.summarize_service.SummaryReader"):
+            with pytest.raises(SummarizationError):
                 run_summarize(mock_config, Path("/tmp/test.pdf"), "standard")
