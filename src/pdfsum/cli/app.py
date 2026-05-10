@@ -1,36 +1,19 @@
 """argparse 定義・メインCLI"""
 
+from __future__ import annotations
+
 import argparse
+import logging
 import re
 import sys
 
-from pdfsum import __version__
+from digestkit import DigestkitError
+
+from pdfsum import __version__, create_service
 from pdfsum.cli import display
 from pdfsum.config.manager import ConfigManager
-from pdfsum.engines.base import SummarizerEngine
-from pdfsum.engines.factory import SummarizerFactory
-from pdfsum.extractors.pdf_extractor import PDFExtractor
-from pdfsum.models.summary import PdfsumError
-from pdfsum.repositories.sqlite import SQLiteSummaryRepository
+from pdfsum.errors import PdfsumError, exit_code_for, format_digestkit_error
 from pdfsum.services.summarize_service import SummarizeService
-
-
-class _NullEngine(SummarizerEngine):
-    """list/show/deleteコマンド用のダミーエンジン。
-
-    要約生成を行わないコマンドでSummarizeServiceを構築するために使用。
-    summarize()が呼ばれた場合はエラーを送出する。
-    """
-
-    def summarize(self, text: str, length: str) -> str:
-        raise PdfsumError("要約エンジンが初期化されていません")
-
-    def get_model_name(self) -> str:
-        return ""
-
-    def get_max_input_tokens(self) -> int:
-        return 0
-
 
 UUID_PATTERN = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
@@ -61,38 +44,31 @@ def _validate_id(summary_id: str) -> None:
         )
 
 
-def _build_service_for_summarize() -> SummarizeService:
-    """summarizeコマンド用のSummarizeServiceを組み立てる"""
-    config_manager = ConfigManager()
-    config = config_manager.load()
-    api_key = config_manager.get_api_key(config, config.llm.provider)
-    engine = SummarizerFactory.create(
-        config.llm.provider, api_key, config.llm.model, config.summary
-    )
-    extractor = PDFExtractor()
-    repository = SQLiteSummaryRepository(config.database.path)
-    return SummarizeService(extractor, engine, repository)
+def _build_service_for_write() -> SummarizeService:
+    """summarize 用 (LLM 必須)。create_service 経由で公開 API を通る."""
+    return create_service()
 
 
-def _build_service_for_readonly() -> SummarizeService:
-    """list/show/deleteコマンド用のSummarizeServiceを組み立てる。
+def _build_service_for_read() -> SummarizeService:
+    """list/show/delete 用 (LLM 不要)。API キー未設定でも動かす.
 
-    エンジン生成不要のため、ダミーエンジンで組み立てる。
-    APIキー未設定でもlist/show/deleteは動作する。
+    create_service は LLM 設定を要求するため、読み出し専用は
+    SummarizeService(config) を直接呼ぶ。constructor 変更は
+    _common.md note に従い許容 (内部結合用シグネチャ).
     """
-    config_manager = ConfigManager()
-    config = config_manager.load()
-    repository = SQLiteSummaryRepository(config.database.path)
-    extractor = PDFExtractor()
-    engine = _NullEngine()
-    return SummarizeService(extractor, engine, repository)
+    config = ConfigManager().load()
+    return SummarizeService(config)
 
 
 def cmd_summarize(args: argparse.Namespace) -> int:
     """PDF要約コマンド"""
     display.print_progress(1, 3, "PDFテキスト抽出中...")
-    service = _build_service_for_summarize()
-    summary = service.summarize(args.pdf_path, args.length)
+    # --length 未指定時は config.summary.default_length にフォールバック.
+    # config 読み込みのオーバーヘッドを避けたいので create_service が読む config と
+    # 別に再読み込みしている (将来は create_service が config を返す API にしても良い).
+    length = args.length or ConfigManager().load().summary.default_length
+    service = _build_service_for_write()
+    summary = service.summarize(args.pdf_path, length)
     display.print_progress(2, 3, "テキスト要約中... 完了")
     display.print_progress(3, 3, "結果を保存中... 完了")
     display.print_summary_result(summary)
@@ -101,7 +77,7 @@ def cmd_summarize(args: argparse.Namespace) -> int:
 
 def cmd_list(args: argparse.Namespace) -> int:
     """保存済み要約一覧コマンド"""
-    service = _build_service_for_readonly()
+    service = _build_service_for_read()
     summaries = service.list_summaries()
     display.print_summary_list(summaries, full_id=args.full_id)
     return 0
@@ -110,7 +86,7 @@ def cmd_list(args: argparse.Namespace) -> int:
 def cmd_show(args: argparse.Namespace) -> int:
     """保存済み要約表示コマンド"""
     _validate_id(args.summary_id)
-    service = _build_service_for_readonly()
+    service = _build_service_for_read()
 
     if _is_full_uuid(args.summary_id):
         summary = service.get_summary(args.summary_id)
@@ -128,7 +104,7 @@ def cmd_show(args: argparse.Namespace) -> int:
 def cmd_delete(args: argparse.Namespace) -> int:
     """保存済み要約削除コマンド"""
     _validate_id(args.summary_id)
-    service = _build_service_for_readonly()
+    service = _build_service_for_read()
 
     if _is_full_uuid(args.summary_id):
         result = service.delete_summary(args.summary_id)
@@ -169,8 +145,8 @@ def _build_parser() -> argparse.ArgumentParser:
     summarize_parser.add_argument(
         "--length",
         choices=["short", "standard", "detailed"],
-        default="standard",
-        help="要約の長さ（デフォルト: standard）",
+        default=None,
+        help="要約の長さ（未指定時は config.toml の summary.default_length を使用）",
     )
 
     # list サブコマンド
@@ -217,6 +193,19 @@ def main(args: list[str] | None = None) -> int:
     Returns:
         終了コード（0: 成功, 1: エラー, 2: 引数エラー）
     """
+    # digestkit が INFO レベルで出力するログ (例: "llm_call_completed") を
+    # CLI の出力に混ぜないため WARNING に抑制する。Python ライブラリとして
+    # 利用される場合 (create_service / SummarizeService) はロガー設定を
+    # 利用者側に委ねたいので、本関数 (CLI エントリ) のみで設定する。
+    #
+    # digestkit.logging.get_logger は子ロガー (digestkit.summarizers.llm 等) に
+    # 直接 setLevel(INFO) するため、親 "digestkit" だけ WARNING にしても
+    # 効かない。import 済み (= main() 到達時点) の digestkit 系ロガーを
+    # 全て走査して WARNING に上書きする。
+    for _name in list(logging.Logger.manager.loggerDict):
+        if _name.startswith("digestkit"):
+            logging.getLogger(_name).setLevel(logging.WARNING)
+
     parser = _build_parser()
     parsed = parser.parse_args(args)
 
@@ -240,7 +229,10 @@ def main(args: list[str] | None = None) -> int:
         return handler(parsed)
     except PdfsumError as e:
         display.print_error(str(e))
-        return 1
+        return exit_code_for(e)
+    except DigestkitError as e:
+        display.print_error(format_digestkit_error(e))
+        return exit_code_for(e)
     except FileNotFoundError as e:
         display.print_error(str(e))
         return 1

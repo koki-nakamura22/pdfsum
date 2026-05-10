@@ -1,235 +1,203 @@
-"""SQLiteSummaryRepository のユニットテスト"""
+"""SummaryReader のユニットテスト"""
+from __future__ import annotations
 
-import os
 import sqlite3
-from datetime import datetime
+from datetime import UTC
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
-from pdfsum.models.summary import Summary
-from pdfsum.repositories.sqlite import SQLiteSummaryRepository
+from pdfsum.errors import PdfsumError
+from pdfsum.repositories.sqlite import SummaryReader
+
+_INSERT = "INSERT INTO summaries VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
 
 
-def _make_summary(
-    summary_id: str = "a1b2c3d4-e5f6-4a8b-9c0d-e1f2a3b4c5d6",
+def _insert(
+    db_path: Path,
+    *,
+    id: str,
+    pdf_path: str,
     pdf_hash: str = "abc123",
-    summary_length: str = "standard",
-) -> Summary:
-    """テスト用のSummaryオブジェクトを生成する"""
-    return Summary(
-        id=summary_id,
-        pdf_path="/path/to/doc.pdf",
-        pdf_hash=pdf_hash,
-        file_name="doc.pdf",
-        page_count=10,
-        summary_text="テスト要約テキスト",
-        summary_length=summary_length,
-        model_name="test-model",
-        created_at=datetime(2026, 2, 28, 10, 30, 0),
+    page_count: int = 0,
+    summary: str = "テスト要約",
+    length: str = "standard",
+    model: str = "test-model",
+    created_at: str = "2026-01-01T00:00:00+00:00",
+) -> None:
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        _INSERT,
+        (id, pdf_path, pdf_hash, page_count, summary, length, model, created_at),
     )
+    conn.commit()
+    conn.close()
 
 
-class TestSQLiteSummaryRepository:
-    """SQLiteSummaryRepository のテスト"""
+class TestSummaryReader:
+    def test_list_all_returns_in_descending_order(self, tmp_path: Path) -> None:
+        db = tmp_path / "test.db"
+        reader = SummaryReader(db)
+        _insert(db, id="id1", pdf_path="/a.pdf", created_at="2026-01-01T00:00:00+00:00")
+        _insert(db, id="id2", pdf_path="/b.pdf", created_at="2026-02-01T00:00:00+00:00")
 
-    def setup_method(self) -> None:
-        self.repo = SQLiteSummaryRepository(":memory:")
-
-    def test_save_and_find_by_id(self) -> None:
-        """保存した要約をIDで取得できる"""
-        summary = _make_summary()
-        self.repo.save(summary)
-
-        result = self.repo.find_by_id(summary.id)
-
-        assert result is not None
-        assert result.id == summary.id
-        assert result.pdf_path == summary.pdf_path
-        assert result.pdf_hash == summary.pdf_hash
-        assert result.file_name == summary.file_name
-        assert result.page_count == summary.page_count
-        assert result.summary_text == summary.summary_text
-        assert result.summary_length == summary.summary_length
-        assert result.model_name == summary.model_name
-        assert result.created_at == summary.created_at
-
-    def test_find_by_id_returns_none_for_unknown_id(self) -> None:
-        """存在しないIDの場合Noneを返す"""
-        result = self.repo.find_by_id("nonexistent-id")
-        assert result is None
-
-    def test_find_by_id_prefix(self) -> None:
-        """IDプレフィックスで前方一致検索できる"""
-        summary = _make_summary(summary_id="a1b2c3d4-e5f6-4a8b-9c0d-e1f2a3b4c5d6")
-        self.repo.save(summary)
-
-        results = self.repo.find_by_id_prefix("a1b2c3d4")
-
-        assert len(results) == 1
-        assert results[0].id == summary.id
-
-    def test_find_by_id_prefix_returns_empty_for_no_match(self) -> None:
-        """一致しないプレフィックスの場合空リストを返す"""
-        results = self.repo.find_by_id_prefix("xxxxxxxx")
-        assert results == []
-
-    def test_find_by_hash(self) -> None:
-        """PDFハッシュと要約長でキャッシュ検索できる"""
-        summary = _make_summary(pdf_hash="hash123", summary_length="standard")
-        self.repo.save(summary)
-
-        result = self.repo.find_by_hash("hash123", "standard")
-
-        assert result is not None
-        assert result.pdf_hash == "hash123"
-        assert result.summary_length == "standard"
-
-    def test_find_by_hash_returns_none_for_different_length(self) -> None:
-        """同一ハッシュでも異なる要約長では見つからない"""
-        summary = _make_summary(pdf_hash="hash123", summary_length="standard")
-        self.repo.save(summary)
-
-        result = self.repo.find_by_hash("hash123", "short")
-        assert result is None
-
-    def test_find_all_returns_descending_order(self) -> None:
-        """全件取得はcreated_at降順で返す"""
-        summary1 = _make_summary(
-            summary_id="id-1",
-            pdf_hash="hash1",
-        )
-        summary1.created_at = datetime(2026, 1, 1, 0, 0, 0)
-
-        summary2 = _make_summary(
-            summary_id="id-2",
-            pdf_hash="hash2",
-        )
-        summary2.created_at = datetime(2026, 2, 1, 0, 0, 0)
-
-        self.repo.save(summary1)
-        self.repo.save(summary2)
-
-        results = self.repo.find_all()
+        results = reader.list_all()
 
         assert len(results) == 2
-        assert results[0].id == "id-2"  # 新しい方が先
-        assert results[1].id == "id-1"
+        assert results[0].id == "id2"
+        assert results[1].id == "id1"
 
-    def test_delete_returns_true_on_success(self) -> None:
-        """存在する要約の削除はTrueを返す"""
-        summary = _make_summary()
-        self.repo.save(summary)
+    def test_list_all_returns_empty_when_no_data(self, tmp_path: Path) -> None:
+        reader = SummaryReader(tmp_path / "test.db")
+        assert reader.list_all() == []
 
-        result = self.repo.delete(summary.id)
+    def test_get_returns_none_for_unknown_id(self, tmp_path: Path) -> None:
+        reader = SummaryReader(tmp_path / "test.db")
+        assert reader.get("nonexistent-id") is None
+
+    def test_get_returns_summary_for_known_id(self, tmp_path: Path) -> None:
+        db = tmp_path / "test.db"
+        reader = SummaryReader(db)
+        _insert(db, id="id1", pdf_path="/a.pdf", summary="要約テキスト", length="short", model="m1")
+
+        result = reader.get("id1")
+
+        assert result is not None
+        assert result.id == "id1"
+        assert result.summary_text == "要約テキスト"
+        assert result.summary_length == "short"
+        assert result.model_name == "m1"
+        assert result.file_name == "a.pdf"
+        assert result.page_count == 0
+
+    def test_get_by_prefix_single_match(self, tmp_path: Path) -> None:
+        db = tmp_path / "test.db"
+        reader = SummaryReader(db)
+        _insert(db, id="abcd1234-0000-0000-0000-000000000001", pdf_path="/a.pdf")
+
+        result = reader.get_by_prefix("abcd1234")
+
+        assert result.id == "abcd1234-0000-0000-0000-000000000001"
+
+    def test_get_by_prefix_multiple_match_raises(self, tmp_path: Path) -> None:
+        db = tmp_path / "test.db"
+        reader = SummaryReader(db)
+        _insert(db, id="abcd1234-0000-0000-0000-000000000001", pdf_path="/a.pdf", pdf_hash="h1")
+        _insert(db, id="abcd1234-0000-0000-0000-000000000002", pdf_path="/b.pdf", pdf_hash="h2")
+
+        with pytest.raises(PdfsumError):
+            reader.get_by_prefix("abcd1234")
+
+    def test_get_by_prefix_no_match_raises(self, tmp_path: Path) -> None:
+        reader = SummaryReader(tmp_path / "test.db")
+        with pytest.raises(PdfsumError):
+            reader.get_by_prefix("xxxxxxxx")
+
+    def test_delete_returns_true_when_deleted(self, tmp_path: Path) -> None:
+        db = tmp_path / "test.db"
+        reader = SummaryReader(db)
+        _insert(db, id="id1", pdf_path="/a.pdf")
+
+        result = reader.delete("id1")
 
         assert result is True
-        assert self.repo.find_by_id(summary.id) is None
+        assert reader.get("id1") is None
 
-    def test_delete_returns_false_for_unknown_id(self) -> None:
-        """存在しないIDの削除はFalseを返す"""
-        result = self.repo.delete("nonexistent-id")
-        assert result is False
+    def test_delete_returns_false_when_missing(self, tmp_path: Path) -> None:
+        reader = SummaryReader(tmp_path / "test.db")
+        assert reader.delete("nonexistent-id") is False
 
-    def test_find_all_returns_empty_list_when_no_data(self) -> None:
-        """データがない場合空リストを返す"""
-        results = self.repo.find_all()
-        assert results == []
+    def test_resolve_and_delete(self, tmp_path: Path) -> None:
+        db = tmp_path / "test.db"
+        reader = SummaryReader(db)
+        _insert(db, id="abcd1234-0000-0000-0000-000000000001", pdf_path="/a.pdf")
 
-    def test_find_by_id_prefix_multiple_matches(self) -> None:
-        """同じプレフィックスで複数一致する場合のテスト"""
-        summary1 = _make_summary(
-            summary_id="a1b2c3d4-0000-0000-0000-000000000001",
-            pdf_hash="hash1",
+        reader.resolve_and_delete("abcd1234")
+
+        assert reader.get("abcd1234-0000-0000-0000-000000000001") is None
+
+    def test_resolve_and_delete_raises_when_no_match(self, tmp_path: Path) -> None:
+        reader = SummaryReader(tmp_path / "test.db")
+        with pytest.raises(PdfsumError):
+            reader.resolve_and_delete("xxxxxxxx")
+
+    def test_resolve_and_delete_raises_when_delete_fails(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        db = tmp_path / "test.db"
+        reader = SummaryReader(db)
+        _insert(db, id="abcd1234-0000-0000-0000-000000000001", pdf_path="/a.pdf")
+        monkeypatch.setattr(reader, "delete", lambda _: False)
+
+        with pytest.raises(PdfsumError):
+            reader.resolve_and_delete("abcd1234")
+
+    def test_latest_for_path_returns_newest(self, tmp_path: Path) -> None:
+        db = tmp_path / "test.db"
+        reader = SummaryReader(db)
+        abs_path = str((tmp_path / "doc.pdf").resolve())
+        _insert(db, id="id1", pdf_path=abs_path, created_at="2026-01-01T00:00:00+00:00")
+        _insert(db, id="id2", pdf_path=abs_path, created_at="2026-02-01T00:00:00+00:00")
+
+        result = reader.latest_for_path(abs_path)
+
+        assert result.id == "id2"
+
+    def test_latest_for_path_raises_when_missing(self, tmp_path: Path) -> None:
+        reader = SummaryReader(tmp_path / "test.db")
+        with pytest.raises(PdfsumError):
+            reader.latest_for_path("/nonexistent/path.pdf")
+
+    def test_latest_for_path_resolves_relative_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        db = tmp_path / "test.db"
+        reader = SummaryReader(db)
+        abs_path = str((tmp_path / "doc.pdf").resolve())
+        _insert(db, id="id1", pdf_path=abs_path)
+
+        monkeypatch.chdir(tmp_path)
+        result = reader.latest_for_path("doc.pdf")
+
+        assert result.id == "id1"
+        assert result.pdf_path == abs_path
+
+    def test_latest_for_path_ignores_other_paths(self, tmp_path: Path) -> None:
+        db = tmp_path / "test.db"
+        reader = SummaryReader(db)
+        target_path = str((tmp_path / "target.pdf").resolve())
+        other_path = str((tmp_path / "other.pdf").resolve())
+        _insert(db, id="id1", pdf_path=target_path, created_at="2026-01-01T00:00:00+00:00")
+        _insert(db, id="id2", pdf_path=other_path, created_at="2026-02-01T00:00:00+00:00")
+
+        result = reader.latest_for_path(target_path)
+
+        assert result.id == "id1"
+
+    def test_created_at_is_preserved_as_utc(self, tmp_path: Path) -> None:
+        """PdfsumSink が書き込む UTC tz-aware datetime が読み出し時もそのまま
+        UTC のまま返る (将来の多言語/多 TZ 対応で UI 層で変換する方針)."""
+        from datetime import datetime as _dt
+
+        db = tmp_path / "test.db"
+        reader = SummaryReader(db)
+        _insert(
+            db,
+            id="utc-id",
+            pdf_path="/x.pdf",
+            created_at="2026-05-10T12:13:51+00:00",
         )
-        summary2 = _make_summary(
-            summary_id="a1b2c3d4-0000-0000-0000-000000000002",
-            pdf_hash="hash2",
-        )
-        self.repo.save(summary1)
-        self.repo.save(summary2)
 
-        results = self.repo.find_by_id_prefix("a1b2c3d4")
+        result = reader.list_all()[0]
 
-        assert len(results) == 2
+        # tz-aware で読み戻り、UTC のまま
+        assert result.created_at.tzinfo is not None
+        assert result.created_at.utcoffset() == UTC.utcoffset(None)
+        assert result.created_at == _dt.fromisoformat("2026-05-10T12:13:51+00:00")
+        # 表示用 strftime も UTC 値そのまま (時刻オフセットなし)
+        assert result.created_at.strftime("%H:%M") == "12:13"
 
-    def test_close_closes_connection(self) -> None:
-        """close()でDB接続が閉じられる"""
-        self.repo.close()
-        with pytest.raises(sqlite3.ProgrammingError):
-            self.repo.find_all()
-
-    def test_context_manager_returns_self(self) -> None:
-        """__enter__でself が返される"""
-        repo = SQLiteSummaryRepository(":memory:")
-        with repo as r:
-            assert r is repo
-
-    def test_context_manager_closes_on_exit(self) -> None:
-        """コンテキストマネージャ終了時にDB接続が閉じられる"""
-        repo = SQLiteSummaryRepository(":memory:")
-        with repo:
-            repo.save(_make_summary())
-        with pytest.raises(sqlite3.ProgrammingError):
-            repo.find_all()
-
-    def test_init_with_file_path_creates_directory(
-        self, tmp_path: Path
-    ) -> None:
-        """実ファイルパスで初期化時にディレクトリが作成される"""
-        db_path = tmp_path / "nested" / "dir" / "test.db"
-        repo = SQLiteSummaryRepository(str(db_path))
-
-        assert db_path.parent.exists()
-        assert db_path.exists()
-        repo.close()
-
-    def test_init_with_file_path_sets_permissions(
-        self, tmp_path: Path
-    ) -> None:
-        """実ファイルパスで初期化時にファイル権限が0o600に設定される"""
-        db_path = tmp_path / "perm_test.db"
-        repo = SQLiteSummaryRepository(str(db_path))
-
-        stat = os.stat(db_path)
-        assert stat.st_mode & 0o777 == 0o600
-        repo.close()
-
-    def test_init_skips_chmod_on_windows(
-        self, tmp_path: Path
-    ) -> None:
-        """Windows環境ではchmodがスキップされる"""
-        db_path = tmp_path / "win_test.db"
-        with patch("pdfsum.repositories.sqlite.os.chmod") as mock_chmod, \
-             patch("pdfsum.repositories.sqlite.sys.platform", "win32"):
-            repo = SQLiteSummaryRepository(str(db_path))
-            mock_chmod.assert_not_called()
-            repo.close()
-
-    def test_init_calls_chmod_on_posix(
-        self, tmp_path: Path
-    ) -> None:
-        """POSIX環境ではchmodが呼ばれる"""
-        db_path = tmp_path / "posix_test.db"
-        with patch("pdfsum.repositories.sqlite.os.chmod") as mock_chmod, \
-             patch("pdfsum.repositories.sqlite.sys.platform", "linux"):
-            repo = SQLiteSummaryRepository(str(db_path))
-            mock_chmod.assert_called_once_with(db_path, 0o600)
-            repo.close()
-
-    @pytest.mark.parametrize("summary_length", ["short", "standard", "detailed"])
-    def test_save_accepts_valid_summary_lengths(
-        self, summary_length: str
-    ) -> None:
-        """有効な要約長（short/standard/detailed）が保存できる"""
-        summary = _make_summary(
-            summary_id=f"id-{summary_length}",
-            summary_length=summary_length,
-            pdf_hash=f"hash-{summary_length}",
-        )
-        self.repo.save(summary)
-
-        result = self.repo.find_by_id(f"id-{summary_length}")
-        assert result is not None
-        assert result.summary_length == summary_length
+    def test_init_creates_nested_parent_directory(self, tmp_path: Path) -> None:
+        nested_db = tmp_path / "a" / "b" / "c" / "test.db"
+        SummaryReader(nested_db)
+        assert nested_db.exists()

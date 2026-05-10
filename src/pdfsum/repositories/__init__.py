@@ -1,9 +1,7 @@
-"""データレイヤー (Repository パターン)"""
+"""データレイヤー (digestkit Sink プロトコル + 読み出し専用アクセサ)"""
 
-from pdfsum.repositories.base import SummaryRepository
-from pdfsum.repositories.sqlite import SQLiteSummaryRepository
+from pdfsum.repositories.sqlite import SummaryReader
 
 __all__ = [
-    "SummaryRepository",
-    "SQLiteSummaryRepository",
+    "SummaryReader",
 ]

@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: uv sync --frozen
+      - run: uv sync --frozen --all-extras
       - run: uv run ruff check src/ tests/
 
   typecheck:
@@ -20,8 +20,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: uv sync --frozen
-      - run: uv run mypy src/
+      - run: uv sync --frozen --all-extras
+      - run: uv run pyright src/pdfsum
 
   test:
     runs-on: ubuntu-latest
@@ -33,5 +33,5 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - run: uv sync --frozen
+      - run: uv sync --frozen --all-extras
       - run: uv run pytest tests/ --tb=short

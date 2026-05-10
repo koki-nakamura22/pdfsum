@@ -17,20 +17,18 @@ from pdfsum.config.manager import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _mock_summary_reader():
+    """SummaryReader の DB 初期化を抑制する"""
+    with patch("pdfsum.services.summarize_service.SummaryReader"):
+        yield
+
+
 class TestCreateServiceWithConfig:
     """config.toml連携の正常系テスト"""
 
-    @patch("pdfsum.repositories.sqlite.SQLiteSummaryRepository")
-    @patch("pdfsum.extractors.pdf_extractor.PDFExtractor")
-    @patch("pdfsum.engines.factory.SummarizerFactory.create")
     @patch("pdfsum.config.manager.ConfigManager")
-    def test_no_args_uses_config_toml(
-        self,
-        mock_config_manager_cls: MagicMock,
-        mock_factory_create: MagicMock,
-        mock_extractor_cls: MagicMock,
-        mock_repo_cls: MagicMock,
-    ) -> None:
+    def test_no_args_uses_config_toml(self, mock_config_manager_cls: MagicMock) -> None:
         """引数なしでconfig.tomlの設定を使用する"""
         mock_config = Config(
             llm=LLMConfig(provider="gemini", model="gemini-2.5-flash"),
@@ -42,67 +40,30 @@ class TestCreateServiceWithConfig:
         mock_manager.get_api_key.return_value = "test-api-key"
         mock_config_manager_cls.return_value = mock_manager
 
-        mock_engine = MagicMock()
-        mock_factory_create.return_value = mock_engine
-
         service = create_service()
 
         assert isinstance(service, SummarizeService)
         mock_manager.load.assert_called_once()
         mock_manager.get_api_key.assert_called_once_with(mock_config, "gemini")
-        mock_factory_create.assert_called_once_with(
-            "gemini", "test-api-key", "gemini-2.5-flash", mock_config.summary
-        )
 
 
 class TestCreateServiceWithProvider:
     """provider+api_key明示指定の正常系テスト"""
 
-    @patch("pdfsum.repositories.sqlite.SQLiteSummaryRepository")
-    @patch("pdfsum.extractors.pdf_extractor.PDFExtractor")
-    @patch("pdfsum.engines.factory.SummarizerFactory.create")
-    def test_provider_and_api_key(
-        self,
-        mock_factory_create: MagicMock,
-        mock_extractor_cls: MagicMock,
-        mock_repo_cls: MagicMock,
-    ) -> None:
+    def test_provider_and_api_key(self) -> None:
         """provider+api_key指定で直接構築"""
-        mock_engine = MagicMock()
-        mock_factory_create.return_value = mock_engine
-
         service = create_service(provider="claude", api_key="my-key")
-
         assert isinstance(service, SummarizeService)
-        mock_factory_create.assert_called_once()
-        call_args = mock_factory_create.call_args
-        assert call_args[0][0] == "claude"
-        assert call_args[0][1] == "my-key"
-        assert call_args[0][2] is None  # エンジン側のデフォルトに委譲
 
-    @patch("pdfsum.repositories.sqlite.SQLiteSummaryRepository")
-    @patch("pdfsum.extractors.pdf_extractor.PDFExtractor")
-    @patch("pdfsum.engines.factory.SummarizerFactory.create")
-    def test_env_var_fallback(
-        self,
-        mock_factory_create: MagicMock,
-        mock_extractor_cls: MagicMock,
-        mock_repo_cls: MagicMock,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+    def test_env_var_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """api_key未指定時に環境変数からフォールバック"""
         monkeypatch.setenv("GEMINI_API_KEY", "env-key")
-        mock_factory_create.return_value = MagicMock()
 
         service = create_service(provider="gemini")
-
         assert isinstance(service, SummarizeService)
-        call_args = mock_factory_create.call_args
-        assert call_args[0][1] == "env-key"
 
     def test_no_api_key_no_env_raises_config_error(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """api_key未指定・環境変数なしでConfigError"""
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
@@ -119,79 +80,44 @@ class TestCreateServiceWithProvider:
 class TestCreateServiceDefaultModel:
     """デフォルトモデル選択のテスト"""
 
-    @patch("pdfsum.repositories.sqlite.SQLiteSummaryRepository")
-    @patch("pdfsum.extractors.pdf_extractor.PDFExtractor")
-    @patch("pdfsum.engines.factory.SummarizerFactory.create")
-    def test_model_none_delegates_to_engine(
-        self,
-        mock_factory_create: MagicMock,
-        mock_extractor_cls: MagicMock,
-        mock_repo_cls: MagicMock,
-    ) -> None:
-        """model未指定時はNoneをfactoryに渡し、エンジン側のデフォルトに委譲"""
-        mock_factory_create.return_value = MagicMock()
-        create_service(provider="gemini", api_key="key")
-        assert mock_factory_create.call_args[0][2] is None
+    def test_model_none_uses_default(self) -> None:
+        """model未指定時はDEFAULT_MODELを使用"""
+        from pdfsum.config.manager import DEFAULT_MODEL
 
-    @patch("pdfsum.repositories.sqlite.SQLiteSummaryRepository")
-    @patch("pdfsum.extractors.pdf_extractor.PDFExtractor")
-    @patch("pdfsum.engines.factory.SummarizerFactory.create")
-    def test_custom_model_overrides_default(
-        self,
-        mock_factory_create: MagicMock,
-        mock_extractor_cls: MagicMock,
-        mock_repo_cls: MagicMock,
-    ) -> None:
-        mock_factory_create.return_value = MagicMock()
-        create_service(provider="gemini", api_key="key", model="gemini-2.5-pro")
-        assert mock_factory_create.call_args[0][2] == "gemini-2.5-pro"
+        with patch("pdfsum.SummarizeService") as mock_cls:
+            create_service(provider="gemini", api_key="key")
+            call_config = mock_cls.call_args[1]["config"]
+            assert call_config.llm.model == DEFAULT_MODEL
+
+    def test_custom_model_overrides_default(self) -> None:
+        with patch("pdfsum.SummarizeService") as mock_cls:
+            create_service(provider="gemini", api_key="key", model="gemini-2.5-pro")
+            call_config = mock_cls.call_args[1]["config"]
+            assert call_config.llm.model == "gemini-2.5-pro"
 
 
 class TestCreateServiceOptions:
     """オプション引数のテスト"""
 
-    @patch("pdfsum.repositories.sqlite.SQLiteSummaryRepository")
-    @patch("pdfsum.extractors.pdf_extractor.PDFExtractor")
-    @patch("pdfsum.engines.factory.SummarizerFactory.create")
-    def test_custom_db_path(
-        self,
-        mock_factory_create: MagicMock,
-        mock_extractor_cls: MagicMock,
-        mock_repo_cls: MagicMock,
-    ) -> None:
-        mock_factory_create.return_value = MagicMock()
-        create_service(provider="gemini", api_key="key", db_path="/tmp/custom.db")
-        mock_repo_cls.assert_called_once_with("/tmp/custom.db")
+    def test_custom_db_path(self) -> None:
+        with patch("pdfsum.SummarizeService") as mock_cls:
+            create_service(provider="gemini", api_key="key", db_path="/tmp/custom.db")
+            call_config = mock_cls.call_args[1]["config"]
+            assert call_config.database.path == "/tmp/custom.db"
 
-    @patch("pdfsum.repositories.sqlite.SQLiteSummaryRepository")
-    @patch("pdfsum.extractors.pdf_extractor.PDFExtractor")
-    @patch("pdfsum.engines.factory.SummarizerFactory.create")
-    def test_extra_instructions(
-        self,
-        mock_factory_create: MagicMock,
-        mock_extractor_cls: MagicMock,
-        mock_repo_cls: MagicMock,
-    ) -> None:
-        mock_factory_create.return_value = MagicMock()
-        create_service(
-            provider="gemini",
-            api_key="key",
-            extra_instructions="日本語で要約してください",
-        )
-        call_args = mock_factory_create.call_args
-        summary_config = call_args[0][3]
-        assert summary_config.extra_instructions == "日本語で要約してください"
+    def test_extra_instructions(self) -> None:
+        with patch("pdfsum.SummarizeService") as mock_cls:
+            create_service(
+                provider="gemini",
+                api_key="key",
+                extra_instructions="日本語で要約してください",
+            )
+            call_config = mock_cls.call_args[1]["config"]
+            assert call_config.summary.extra_instructions == "日本語で要約してください"
 
-    @patch("pdfsum.repositories.sqlite.SQLiteSummaryRepository")
-    @patch("pdfsum.extractors.pdf_extractor.PDFExtractor")
-    @patch("pdfsum.engines.factory.SummarizerFactory.create")
     @patch("pdfsum.config.manager.ConfigManager")
     def test_extra_instructions_with_config(
-        self,
-        mock_config_manager_cls: MagicMock,
-        mock_factory_create: MagicMock,
-        mock_extractor_cls: MagicMock,
-        mock_repo_cls: MagicMock,
+        self, mock_config_manager_cls: MagicMock
     ) -> None:
         """config.toml使用時にextra_instructionsを上書き"""
         mock_config = Config(
@@ -203,13 +129,11 @@ class TestCreateServiceOptions:
         mock_manager.load.return_value = mock_config
         mock_manager.get_api_key.return_value = "test-key"
         mock_config_manager_cls.return_value = mock_manager
-        mock_factory_create.return_value = MagicMock()
 
-        create_service(extra_instructions="上書き指示")
-
-        call_args = mock_factory_create.call_args
-        summary_config = call_args[0][3]
-        assert summary_config.extra_instructions == "上書き指示"
+        with patch("pdfsum.SummarizeService") as mock_cls:
+            create_service(extra_instructions="上書き指示")
+            call_config = mock_cls.call_args[1]["config"]
+            assert call_config.summary.extra_instructions == "上書き指示"
 
 
 class TestAllExports:
