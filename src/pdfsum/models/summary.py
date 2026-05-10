@@ -1,7 +1,30 @@
-"""データモデル定義"""
+"""データモデル定義.
+
+例外型は ``pdfsum.errors`` へ移管済み (ADR-002 に伴う T008)。
+旧 import 経路 (``from pdfsum.models.summary import PdfsumError`` 等)
+の後方互換のため、ここから re-export する。新規コードは ``pdfsum.errors``
+を直接 import すること。
+"""
 
 from dataclasses import dataclass
 from datetime import datetime
+
+from pdfsum.errors import (
+    ConfigError,
+    ExtractionError,
+    PdfsumError,
+    SummarizationError,
+)
+
+__all__ = [
+    "ConfigError",
+    "ExtractedDocument",
+    "ExtractedPage",
+    "ExtractionError",
+    "PdfsumError",
+    "Summary",
+    "SummarizationError",
+]
 
 
 @dataclass
