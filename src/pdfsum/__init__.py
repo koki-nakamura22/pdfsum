@@ -1,21 +1,19 @@
-"""pdfsum - PDFドキュメント要約CLIツール"""
+"""pdfsum - PDF ドキュメント要約 CLI ツール / Python ライブラリ."""
 
 from __future__ import annotations
 
 import os
 from importlib.metadata import version as _pkg_version
-from typing import TYPE_CHECKING
+from pathlib import Path
 
-from pdfsum.models.summary import (
+from pdfsum.errors import (
     ConfigError,
     ExtractionError,
     PdfsumError,
     SummarizationError,
-    Summary,
 )
-
-if TYPE_CHECKING:
-    from pdfsum.services.summarize_service import SummarizeService
+from pdfsum.models.summary import Summary
+from pdfsum.services.summarize_service import SummarizeService
 
 __version__ = _pkg_version("pdfsum")
 
@@ -28,13 +26,6 @@ __all__ = [
     "ExtractionError",
     "SummarizationError",
 ]
-
-
-def __getattr__(name: str) -> object:
-    if name == "SummarizeService":
-        from pdfsum.services.summarize_service import SummarizeService
-        return SummarizeService
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def create_service(
@@ -64,8 +55,6 @@ def create_service(
     Raises:
         ConfigError: 設定の読み込みやAPIキーの取得に失敗した場合
     """
-    from pathlib import Path as _Path
-
     from pdfsum.config.manager import (
         DEFAULT_MODEL,
         DEFAULT_PROVIDER_CONFIGS,
@@ -76,7 +65,6 @@ def create_service(
         SummaryConfig,
         get_default_db_path,
     )
-    from pdfsum.services.summarize_service import SummarizeService as _SummarizeService
 
     if provider is None:
         config_manager = ConfigManager()
@@ -112,7 +100,7 @@ def create_service(
                 )
 
         resolved_db_path = (
-            str(_Path(db_path).expanduser()) if db_path else get_default_db_path()
+            str(Path(db_path).expanduser()) if db_path else get_default_db_path()
         )
         built_config = Config(
             llm=LLMConfig(provider=provider, model=model or DEFAULT_MODEL),
@@ -125,4 +113,4 @@ def create_service(
     if env_var_name and resolved_api_key:
         os.environ[env_var_name] = resolved_api_key
 
-    return _SummarizeService(config=built_config)
+    return SummarizeService(config=built_config)
