@@ -72,6 +72,10 @@ class TestIsShortId:
         """7文字で False を返す"""
         assert not _is_short_id("a1b2c3d")
 
+    def test_too_long_returns_false(self) -> None:
+        """9文字で False を返す"""
+        assert not _is_short_id("a1b2c3d45")
+
     def test_non_hex_returns_false(self) -> None:
         """非16進数文字を含む場合 False を返す"""
         assert not _is_short_id("a1b2g3d4")
@@ -158,6 +162,30 @@ class TestCmdList:
             cmd_list(args)
             mock_display.assert_called_once_with(summaries, full_id=True)
 
+    @patch("pdfsum.cli.app._build_service_for_read")
+    def test_full_id_false_calls_display_with_false_flag(self, mock_build: Mock) -> None:
+        """full_id=False で display に full_id=False を渡す"""
+        mock_service = Mock()
+        mock_build.return_value = mock_service
+        summaries: list[Summary] = []
+        mock_service.list_summaries.return_value = summaries
+
+        with patch("pdfsum.cli.app.display.print_summary_list") as mock_display:
+            args = Namespace(full_id=False)
+            cmd_list(args)
+            mock_display.assert_called_once_with(summaries, full_id=False)
+
+    @patch("pdfsum.cli.app._build_service_for_read")
+    def test_propagates_pdfsum_error(self, mock_build: Mock) -> None:
+        """list_summaries が PdfsumError を投げた場合に伝播させる"""
+        mock_service = Mock()
+        mock_build.return_value = mock_service
+        mock_service.list_summaries.side_effect = PdfsumError("DB読み取り失敗")
+
+        args = Namespace(full_id=False)
+        with pytest.raises(PdfsumError, match="DB読み取り失敗"):
+            cmd_list(args)
+
 
 class TestCmdShow:
     """cmd_show のテスト"""
@@ -203,6 +231,17 @@ class TestCmdShow:
         mock_service.get_summary_by_prefix.assert_called_once_with(
             "a1b2c3d4"
         )
+
+    @patch("pdfsum.cli.app._build_service_for_read")
+    def test_short_id_not_found_raises_error(self, mock_build: Mock) -> None:
+        """短縮ID指定で prefix が見つからない場合に PdfsumError を伝播させる"""
+        mock_service = Mock()
+        mock_build.return_value = mock_service
+        mock_service.get_summary_by_prefix.side_effect = PdfsumError("要約が見つかりません")
+
+        args = Namespace(summary_id="a1b2c3d4")
+        with pytest.raises(PdfsumError, match="要約が見つかりません"):
+            cmd_show(args)
 
     def test_invalid_id_raises_error(self) -> None:
         """無効なID形式で PdfsumError を投げる"""
@@ -252,6 +291,17 @@ class TestCmdDelete:
         args = Namespace(summary_id="a1b2c3d4")
         assert cmd_delete(args) == 0
         mock_service.resolve_and_delete.assert_called_once_with("a1b2c3d4")
+
+    @patch("pdfsum.cli.app._build_service_for_read")
+    def test_short_id_not_found_raises_error(self, mock_build: Mock) -> None:
+        """短縮ID指定で resolve_and_delete が PdfsumError を投げた場合に伝播させる"""
+        mock_service = Mock()
+        mock_build.return_value = mock_service
+        mock_service.resolve_and_delete.side_effect = PdfsumError("要約が見つかりません")
+
+        args = Namespace(summary_id="a1b2c3d4")
+        with pytest.raises(PdfsumError, match="要約が見つかりません"):
+            cmd_delete(args)
 
     def test_invalid_id_raises_error(self) -> None:
         """無効なID形式で PdfsumError を投げる"""
