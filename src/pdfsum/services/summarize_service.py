@@ -79,26 +79,32 @@ def build_digester(
     pdf_path: Path,
     length: str,
 ) -> digestkit.Digester:
-    summarizer_cls = ChunkedLLMSummarizer if config.summary.chunked else LLMSummarizer
     base_prompts = _resolve_prompts(config)
     prompts = _build_prompts(base_prompts, config.summary.extra_instructions)
-    # ChunkedLLMSummarizer 限定の追加引数を組み立てる:
-    # digestkit 0.1.0 のバグ回避: ChunkedLLMSummarizer はモデルの context window
-    # 算出に litellm の `max_tokens` (= 出力上限) を使ってしまっており、
-    # 例えば gemini-2.5-flash では 65,535 となり閾値が ~57k tokens に狭まる.
-    # 実際の入力 context window (`max_input_tokens`) は 1,048,576 で旧 pdfsum
-    # も `max_input_tokens * 0.8 ≒ 839k` を閾値にしていた. 同等の挙動を再現
-    # するため `chunk_size` を明示指定して digestkit 内部の自動算出を上書きする.
-    extra_kwargs: dict[str, int] = {}
-    if summarizer_cls is ChunkedLLMSummarizer:
-        extra_kwargs["chunk_size"] = _resolve_chunk_size(config.llm.provider, config.llm.model)
-    summarizer = summarizer_cls(
-        provider=config.llm.provider,
-        model=config.llm.model,
-        prompts=prompts,
-        default_length=length,
-        **extra_kwargs,
-    )
+    summarizer: LLMSummarizer | ChunkedLLMSummarizer
+    if config.summary.chunked:
+        # digestkit 0.1.0 のバグ回避: ChunkedLLMSummarizer はモデルの
+        # context window 算出に litellm の `max_tokens` (= 出力上限) を
+        # 使ってしまっており、例えば gemini-2.5-flash では 65,535 となり
+        # 閾値が ~57k tokens に狭まる. 実際の入力 context window
+        # (`max_input_tokens`) は 1,048,576 で旧 pdfsum も
+        # `max_input_tokens * 0.8 ≒ 839k` を閾値にしていた. 同等の挙動を
+        # 再現するため `chunk_size` を明示指定して digestkit 内部の
+        # 自動算出を上書きする.
+        summarizer = ChunkedLLMSummarizer(
+            provider=config.llm.provider,
+            model=config.llm.model,
+            prompts=prompts,
+            default_length=length,
+            chunk_size=_resolve_chunk_size(config.llm.provider, config.llm.model),
+        )
+    else:
+        summarizer = LLMSummarizer(
+            provider=config.llm.provider,
+            model=config.llm.model,
+            prompts=prompts,
+            default_length=length,
+        )
     return digestkit.Digester(
         source=SingleFileSource(pdf_path),
         extractor=PDFExtractor(),
