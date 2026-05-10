@@ -1,48 +1,28 @@
-"""データモデルとカスタム例外クラスの定義"""
+"""データモデル定義.
+
+例外型は ``pdfsum.errors`` へ移管済み (ADR-002 に伴う T008)。
+旧 import 経路 (``from pdfsum.models.summary import PdfsumError`` 等)
+の後方互換のため、ここから re-export する。新規コードは ``pdfsum.errors``
+を直接 import すること。
+"""
 
 from dataclasses import dataclass
 from datetime import datetime
 
-# --- カスタム例外 ---
+from pdfsum.errors import (
+    ConfigError,
+    ExtractionError,
+    PdfsumError,
+    SummarizationError,
+)
 
-
-class PdfsumError(Exception):
-    """pdfsum の基底例外クラス"""
-
-
-class ExtractionError(PdfsumError):
-    """PDF テキスト抽出の失敗"""
-
-
-class SummarizationError(PdfsumError):
-    """要約生成の失敗"""
-
-
-class ConfigError(PdfsumError):
-    """設定の読み込み・検証の失敗"""
-
-
-# --- データモデル ---
-
-
-@dataclass
-class ExtractedPage:
-    """抽出されたページのテキスト"""
-
-    page_number: int  # ページ番号（1始まり）
-    text: str  # 抽出されたテキスト
-
-
-@dataclass
-class ExtractedDocument:
-    """PDFから抽出されたテキストデータ"""
-
-    file_name: str  # ファイル名
-    pdf_path: str  # ファイルパス
-    pdf_hash: str  # SHA-256ハッシュ
-    page_count: int  # 総ページ数
-    pages: list[ExtractedPage]  # ページごとの抽出結果
-    total_text: str  # 全ページ結合テキスト
+__all__ = [
+    "ConfigError",
+    "ExtractionError",
+    "PdfsumError",
+    "SummarizationError",
+    "Summary",
+]
 
 
 @dataclass

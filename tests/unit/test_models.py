@@ -4,50 +4,11 @@ from datetime import datetime
 
 from pdfsum.models.summary import (
     ConfigError,
-    ExtractedDocument,
-    ExtractedPage,
     ExtractionError,
     PdfsumError,
     SummarizationError,
     Summary,
 )
-
-
-class TestExtractedPage:
-    """ExtractedPage データクラスのテスト"""
-
-    def test_create_extracted_page(self) -> None:
-        """ExtractedPageが正しく生成される"""
-        page = ExtractedPage(page_number=1, text="Hello World")
-
-        assert page.page_number == 1
-        assert page.text == "Hello World"
-
-
-class TestExtractedDocument:
-    """ExtractedDocument データクラスのテスト"""
-
-    def test_create_extracted_document(self) -> None:
-        """ExtractedDocumentが正しく生成される"""
-        pages = [
-            ExtractedPage(page_number=1, text="Page 1"),
-            ExtractedPage(page_number=2, text="Page 2"),
-        ]
-        doc = ExtractedDocument(
-            file_name="test.pdf",
-            pdf_path="/path/to/test.pdf",
-            pdf_hash="a" * 64,
-            page_count=2,
-            pages=pages,
-            total_text="Page 1\nPage 2",
-        )
-
-        assert doc.file_name == "test.pdf"
-        assert doc.pdf_path == "/path/to/test.pdf"
-        assert doc.pdf_hash == "a" * 64
-        assert doc.page_count == 2
-        assert len(doc.pages) == 2
-        assert doc.total_text == "Page 1\nPage 2"
 
 
 class TestSummary:

@@ -4,11 +4,12 @@ import os
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, cast
 
 from dotenv import load_dotenv
 from platformdirs import user_config_dir, user_data_dir
 
-from pdfsum.models.summary import ConfigError
+from pdfsum.errors import ConfigError
 
 
 def get_default_config_path() -> str:
@@ -37,13 +38,22 @@ class ProviderConfig:
     api_key_env: str
 
 
+def _empty_providers() -> dict[str, ProviderConfig]:
+    return {}
+
+
+def _as_dict(value: Any) -> dict[str, Any]:
+    """値が dict なら dict[str, Any] として返し、そうでなければ空 dict を返す."""
+    return cast(dict[str, Any], value) if isinstance(value, dict) else {}
+
+
 @dataclass
 class LLMConfig:
     """LLM設定"""
 
     provider: str = DEFAULT_PROVIDER
     model: str = DEFAULT_MODEL
-    providers: dict[str, ProviderConfig] = field(default_factory=dict)
+    providers: dict[str, ProviderConfig] = field(default_factory=_empty_providers)
 
     def __post_init__(self) -> None:
         if not self.providers:
@@ -59,6 +69,13 @@ class SummaryConfig:
 
     default_length: str = DEFAULT_SUMMARY_LENGTH
     extra_instructions: str = ""
+    # 旧 pdfsum は SummarizeService 内で常に ChunkedSummarizer を経由しており、
+    # 短文は単発呼び出しに自動 fallback、長文は自動でチャンク分割していた.
+    # digestkit.ChunkedLLMSummarizer も同じ自動 fallback 仕様を持つため、
+    # デフォルトを True にして旧挙動 (利用者がチャンキングを意識せず長文 PDF も
+    # 処理可能) と一致させる。False を明示すると LLMSummarizer (単発) を使うが、
+    # context window 超過で LLM プロバイダ側のレート制限/エラーに当たり得る.
+    chunked: bool = True
     prompt_short: str = ""
     prompt_standard: str = ""
     prompt_detailed: str = ""
@@ -127,63 +144,48 @@ class ConfigManager:
 
         return self._parse_config(data)
 
-    def _parse_config(self, data: dict[str, object]) -> Config:
+    def _parse_config(self, data: dict[str, Any]) -> Config:
         """TOMLデータからConfigオブジェクトを構築する"""
-        llm_data = data.get("llm", {})
-        if not isinstance(llm_data, dict):
-            llm_data = {}
-
-        summary_data = data.get("summary", {})
-        if not isinstance(summary_data, dict):
-            summary_data = {}
-
-        db_data = data.get("database", {})
-        if not isinstance(db_data, dict):
-            db_data = {}
+        llm_data = _as_dict(data.get("llm"))
+        summary_data = _as_dict(data.get("summary"))
+        db_data = _as_dict(data.get("database"))
 
         # LLMプロバイダ設定の解析
         providers: dict[str, ProviderConfig] = {}
         for provider_name, default_env in DEFAULT_PROVIDER_CONFIGS.items():
-            provider_data = llm_data.get(provider_name, {})
-            if isinstance(provider_data, dict):
-                api_key_env = provider_data.get("api_key_env", default_env)
-                if isinstance(api_key_env, str):
-                    providers[provider_name] = ProviderConfig(
-                        api_key_env=api_key_env
-                    )
-                else:
-                    providers[provider_name] = ProviderConfig(
-                        api_key_env=default_env
-                    )
-            else:
-                providers[provider_name] = ProviderConfig(
-                    api_key_env=default_env
-                )
+            provider_data = _as_dict(llm_data.get(provider_name))
+            api_key_env = provider_data.get("api_key_env", default_env)
+            providers[provider_name] = ProviderConfig(
+                api_key_env=str(api_key_env) if isinstance(api_key_env, str) else default_env
+            )
 
-        provider_str = llm_data.get("provider", DEFAULT_PROVIDER)
-        model_str = llm_data.get("model", DEFAULT_MODEL)
-        length_str = summary_data.get("default_length", DEFAULT_SUMMARY_LENGTH)
-        extra_instructions = summary_data.get("extra_instructions", "")
-        prompt_short = summary_data.get("prompt_short", "")
-        prompt_standard = summary_data.get("prompt_standard", "")
-        prompt_detailed = summary_data.get("prompt_detailed", "")
-        db_path_str = db_data.get("path", "")
+        provider_str: str = str(llm_data.get("provider", DEFAULT_PROVIDER))
+        model_str: str = str(llm_data.get("model", DEFAULT_MODEL))
+        length_str: str = str(summary_data.get("default_length", DEFAULT_SUMMARY_LENGTH))
+        extra_instructions: str = str(summary_data.get("extra_instructions", ""))
+        chunked_val = summary_data.get("chunked", True)
+        chunked: bool = bool(chunked_val) if isinstance(chunked_val, bool) else True
+        prompt_short: str = str(summary_data.get("prompt_short", ""))
+        prompt_standard: str = str(summary_data.get("prompt_standard", ""))
+        prompt_detailed: str = str(summary_data.get("prompt_detailed", ""))
+        db_path_str: str = str(db_data.get("path", ""))
 
         return Config(
             llm=LLMConfig(
-                provider=str(provider_str),
-                model=str(model_str),
+                provider=provider_str,
+                model=model_str,
                 providers=providers,
             ),
             summary=SummaryConfig(
-                default_length=str(length_str),
-                extra_instructions=str(extra_instructions),
-                prompt_short=str(prompt_short),
-                prompt_standard=str(prompt_standard),
-                prompt_detailed=str(prompt_detailed),
+                default_length=length_str,
+                extra_instructions=extra_instructions,
+                chunked=chunked,
+                prompt_short=prompt_short,
+                prompt_standard=prompt_standard,
+                prompt_detailed=prompt_detailed,
             ),
             database=DatabaseConfig(
-                path=str(db_path_str),
+                path=db_path_str,
             ),
         )
 

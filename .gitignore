@@ -43,3 +43,10 @@ docs/
 
 # 一時ファイル
 tmp/
+vendor/*
+!vendor/digestkit-*.whl
+.auto-implement/
+.auto-implement-on-docker/
+.auto-implement-run-*.log
+tasks.json
+.claude/scheduled_tasks.lock
