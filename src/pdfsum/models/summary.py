@@ -18,33 +18,11 @@ from pdfsum.errors import (
 
 __all__ = [
     "ConfigError",
-    "ExtractedDocument",
-    "ExtractedPage",
     "ExtractionError",
     "PdfsumError",
     "Summary",
     "SummarizationError",
 ]
-
-
-@dataclass
-class ExtractedPage:
-    """抽出されたページのテキスト"""
-
-    page_number: int  # ページ番号（1始まり）
-    text: str  # 抽出されたテキスト
-
-
-@dataclass
-class ExtractedDocument:
-    """PDFから抽出されたテキストデータ"""
-
-    file_name: str  # ファイル名
-    pdf_path: str  # ファイルパス
-    pdf_hash: str  # SHA-256ハッシュ
-    page_count: int  # 総ページ数
-    pages: list[ExtractedPage]  # ページごとの抽出結果
-    total_text: str  # 全ページ結合テキスト
 
 
 @dataclass
