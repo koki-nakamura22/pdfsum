@@ -26,30 +26,15 @@ PDFドキュメントをLLM APIで要約するCLIツール。
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/)（推奨）
 
-## インストール (当面)
-
-digestkit は現在 PyPI 未公開のため、`inboxkit` リポジトリから wheel をビルドして `vendor/` に置いてから `uv sync` します。
+## インストール
 
 ```bash
-# 1. inboxkit をチェックアウト (pdfsum と同階層)
-git clone https://github.com/koki-nakamura22/inboxkit.git ../inboxkit
-
-# 2. digestkit の wheel をビルドして pdfsum/vendor/ に同梱
-(cd ../inboxkit/packages/digestkit && uv build --wheel)
-mkdir -p vendor && cp ../inboxkit/dist/digestkit-0.1.0-py3-none-any.whl vendor/
-
-# 3. pdfsum をインストール
-uv sync   # tool.uv.sources で vendor/digestkit-0.1.0-*.whl を参照
+uv add pdfsum
+# または
+pip install pdfsum
 ```
 
-`pyproject.toml` の `tool.uv.sources` 設定（既に含まれています）:
-
-```toml
-[tool.uv.sources]
-digestkit = { path = "vendor/digestkit-0.1.0-py3-none-any.whl" }
-```
-
-PyPI 公開後は通常の `uv add pdfsum` / `pip install pdfsum` で済む予定です。
+依存パッケージの [digestkit](https://pypi.org/project/digestkit/) は PyPI から自動で解決されます。
 
 ## セットアップ
 
