@@ -5,7 +5,7 @@ description = "PDFドキュメント要約CLIツール"
 license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
-    "digestkit[pdf]>=0.1.0",
+    "digestkit[pdf]>=0.1.0,<0.2",
     "platformdirs>=4.0",
     "python-dotenv>=1",
 ]
