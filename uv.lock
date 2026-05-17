@@ -1019,7 +1019,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "digestkit", extras = ["pdf"], specifier = ">=0.1.0" },
+    { name = "digestkit", extras = ["pdf"], specifier = ">=0.1.0,<0.2" },
     { name = "pip", marker = "extra == 'dev'", specifier = ">=26" },
     { name = "platformdirs", specifier = ">=4.0" },
     { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },
