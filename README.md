@@ -56,7 +56,7 @@ OPENAI_API_KEY=your-api-key
 ```toml
 [llm]
 provider = "gemini"          # gemini | claude | openai
-model = "gemini-2.5-flash"
+model = "gemini-3.5-flash-lite"   # デフォルト値（2026-08 時点の選定）
 
 [summary]
 default_length = "standard"  # short | standard | detailed
@@ -161,20 +161,33 @@ service = create_service(
 
 ## 対応モデル
 
+以下は **2026-08 時点** のラインナップです（入力上限・出力上限は litellm の
+`get_model_info` の値）。「デフォルト」印はそのプロバイダを選んだときの推奨値で、
+`config.toml` を用意しない場合に実際に使われるのは Gemini のデフォルト
+（`gemini-3.5-flash-lite`）です。
+
 | プロバイダ | モデル | 入力上限 | 出力上限 | デフォルト |
 |-----------|--------|---------|---------|-----------|
-| Gemini    | gemini-2.5-flash | 1,048,576 | 65,535 | ✅ |
-| Gemini    | gemini-2.5-flash-lite | 1,048,576 | 65,535 | |
-| Gemini    | gemini-2.5-pro | 1,048,576 | 65,535 | |
-| Claude    | claude-opus-4-6 | 1,000,000 | 128,000 | |
-| Claude    | claude-sonnet-4-6 | 1,000,000 | 64,000 | ✅ |
-| Claude    | claude-haiku-4-5-20251001 | 200,000 | 64,000 | |
-| OpenAI    | gpt-5.4 | 1,000,000 | 128,000 | |
-| OpenAI    | gpt-5.4-mini | 400,000 | 128,000 | |
-| OpenAI    | gpt-5.4-nano | 400,000 | 128,000 | |
-| OpenAI    | gpt-4.1 | 1,047,576 | 32,768 | |
-| OpenAI    | gpt-4.1-mini | 1,047,576 | 32,768 | ✅ |
-| OpenAI    | gpt-4.1-nano | 1,047,576 | 32,768 | |
+| Gemini    | gemini-3.5-flash-lite | 1,048,576 | 65,536 | ✅ |
+| Gemini    | gemini-3.1-flash-lite | 1,048,576 | 65,536 | |
+| Gemini    | gemini-3.6-flash | 1,048,576 | 65,536 | |
+| Gemini    | gemini-3.5-flash | 1,048,576 | 65,535 | |
+| Claude    | claude-opus-5 | 1,000,000 | 128,000 | |
+| Claude    | claude-sonnet-5 | 1,000,000 | 128,000 | ✅ |
+| Claude    | claude-haiku-4-5 | 200,000 | 64,000 | |
+| OpenAI    | gpt-5.6 | 1,050,000 | 128,000 | |
+| OpenAI    | gpt-5.6-terra | 1,050,000 | 128,000 | |
+| OpenAI    | gpt-5.6-luna | 1,050,000 | 128,000 | |
+| OpenAI    | gpt-5.4-mini | 272,000 | 128,000 | ✅ |
+| OpenAI    | gpt-5.4-nano | 272,000 | 128,000 | |
+
+モデル名を変更するときは、litellm がその名前を解決できることを確認してください。
+解決できない場合、チャンク分割の閾値がエラーも警告もなく 32,000 tokens に縮退し、
+長い PDF の要約品質が静かに落ちます。
+
+```bash
+uv run python -c "import litellm; print(litellm.get_model_info('gemini/gemini-3.5-flash-lite')['max_input_tokens'])"
+```
 
 ## 内部実装
 

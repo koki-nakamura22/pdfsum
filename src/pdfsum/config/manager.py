@@ -21,7 +21,14 @@ def get_default_db_path() -> str:
     """OS に適したデフォルトデータベースパスを返す"""
     return str(Path(user_data_dir("pdfsum", roaming=True)) / "summaries.db")
 DEFAULT_PROVIDER = "gemini"
-DEFAULT_MODEL = "gemini-2.5-flash"
+# 世代更新時は DEFAULT_MODEL_AS_OF も必ず更新する.
+DEFAULT_MODEL = "gemini-3.5-flash-lite"
+# DEFAULT_MODEL を選定した時点 (YYYY-MM). モデルは頻繁に世代交代するため、
+# 「いつ時点の選定か」を明示して陳腐化の判断材料にする.
+# 選定条件: litellm が `<provider>/<model>` を解決できること (解決できないと
+# SummarizeService の chunk_size が黙って 32k に縮退し要約品質が落ちる) と、
+# 直前のデフォルトから単価が上がらないこと.
+DEFAULT_MODEL_AS_OF = "2026-08"
 DEFAULT_SUMMARY_LENGTH = "standard"
 
 DEFAULT_PROVIDER_CONFIGS: dict[str, str] = {
