@@ -5,8 +5,12 @@ description = "PDFドキュメント要約CLIツール"
 license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
-    "digestkit[pdf]>=0.1.0,<0.2",
+    # 0.2.0 で `pdf` extra の抽出エンジンが pypdf → pypdfium2 に変わった.
+    # pypdf は CID フォント埋め込みの日本語 PDF を無言で文字化けさせるため下限を固定する.
+    "digestkit[pdf]>=0.2.0,<0.3",
     "platformdirs>=4.0",
+    # sink.py がページ数取得で直接 import する (digestkit[pdf] 経由の推移依存に頼らない).
+    "pypdfium2>=4",
     "python-dotenv>=1",
 ]
 
