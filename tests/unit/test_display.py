@@ -173,6 +173,57 @@ class TestPrintSummaryDetail:
         assert "2026-02-28" in captured.out
 
 
+class TestTokenUsageDisplay:
+    """トークン使用量の表示 (issue #21)"""
+
+    def test_detail_contains_token_usage(self, capsys: object) -> None:
+        """show でトークン使用量と所要時間が表示される"""
+        import _pytest.capture
+
+        assert isinstance(capsys, _pytest.capture.CaptureFixture)
+        summary = _make_summary()
+        summary.tokens_in = 1234567
+        summary.tokens_out = 8900
+        summary.latency_ms = 12300
+        print_summary_detail(summary)
+        captured = capsys.readouterr()
+        assert "1,234,567" in captured.out
+        assert "8,900" in captured.out
+        assert "12.3秒" in captured.out
+
+    def test_detail_omits_usage_when_absent(self, capsys: object) -> None:
+        """使用量が無い (カラム追加前の) 要約では表示しない"""
+        import _pytest.capture
+
+        assert isinstance(capsys, _pytest.capture.CaptureFixture)
+        print_summary_detail(_make_summary())
+        captured = capsys.readouterr()
+        assert "トークン" not in captured.out
+        assert "所要時間" not in captured.out
+
+    def test_result_contains_token_usage(self, capsys: object) -> None:
+        """summarize 直後の結果表示にもトークン使用量が出る"""
+        import _pytest.capture
+
+        assert isinstance(capsys, _pytest.capture.CaptureFixture)
+        summary = _make_summary()
+        summary.tokens_in = 1000
+        summary.tokens_out = 200
+        print_summary_result(summary)
+        captured = capsys.readouterr()
+        assert "1,000" in captured.out
+        assert "200" in captured.out
+
+    def test_result_omits_usage_when_absent(self, capsys: object) -> None:
+        """使用量が無い要約では結果表示にトークン欄を出さない"""
+        import _pytest.capture
+
+        assert isinstance(capsys, _pytest.capture.CaptureFixture)
+        print_summary_result(_make_summary())
+        captured = capsys.readouterr()
+        assert "トークン" not in captured.out
+
+
 class TestPrintProgress:
     """print_progress のテスト"""
 

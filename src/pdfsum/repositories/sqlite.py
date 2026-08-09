@@ -5,14 +5,15 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
+from pdfsum.db import ensure_schema
 from pdfsum.errors import PdfsumError
 from pdfsum.models.summary import Summary
 
-_CREATE_TABLE = (
-    "CREATE TABLE IF NOT EXISTS summaries ("
-    "id TEXT PRIMARY KEY, pdf_path TEXT, pdf_hash TEXT, page_count INTEGER, "
-    "summary TEXT, length TEXT, model TEXT, created_at TEXT)"
-)
+
+def _optional_int(row: sqlite3.Row, key: str) -> int | None:
+    """トークン使用量系カラムを読む. 追加前に書かれた既存行は NULL なので None を返す."""
+    value = row[key]
+    return int(value) if value is not None else None
 
 
 def _row_to_summary(row: sqlite3.Row) -> Summary:
@@ -31,6 +32,9 @@ def _row_to_summary(row: sqlite3.Row) -> Summary:
         summary_length=str(row["length"]),
         model_name=str(row["model"]),
         created_at=datetime.fromisoformat(str(row["created_at"])),
+        tokens_in=_optional_int(row, "tokens_in"),
+        tokens_out=_optional_int(row, "tokens_out"),
+        latency_ms=_optional_int(row, "latency_ms"),
     )
 
 
@@ -42,8 +46,7 @@ class SummaryReader:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self._db_path))
         self._conn.row_factory = sqlite3.Row
-        self._conn.execute(_CREATE_TABLE)
-        self._conn.commit()
+        ensure_schema(self._conn)
 
     def list_all(self) -> list[Summary]:
         rows = self._conn.execute(

@@ -205,6 +205,59 @@ class TestPdfsumSinkWrite:
         rows = _fetch_rows(db_path)
         assert rows[0]["model"] == "gpt-4o"
 
+    def test_token_usage_is_stored(
+        self, tmp_path: Path, pdf_file: Path
+    ) -> None:
+        """tokens_in / tokens_out / latency_ms が Digest の値で保存される"""
+        db_path = tmp_path / "db.sqlite"
+        sink = PdfsumSink(db_path, length="standard")
+        digest = Digest(
+            summary="s", tokens_in=1234, tokens_out=567, latency_ms=8901, model="m"
+        )
+        item = Item(id=str(pdf_file), payload=pdf_file)
+
+        sink.write(digest, item)
+
+        rows = _fetch_rows(db_path)
+        assert rows[0]["tokens_in"] == 1234
+        assert rows[0]["tokens_out"] == 567
+        assert rows[0]["latency_ms"] == 8901
+
+    def test_write_to_legacy_db_migrates_and_keeps_rows(
+        self, tmp_path: Path, pdf_file: Path, sample_digest: Digest
+    ) -> None:
+        """使用量カラムが無い既存 DB でもマイグレーションされ、既存行は残る"""
+        db_path = tmp_path / "legacy.sqlite"
+        with sqlite3.connect(db_path) as conn:
+            conn.execute(
+                "CREATE TABLE summaries ("
+                "id TEXT PRIMARY KEY, pdf_path TEXT, pdf_hash TEXT, page_count INTEGER, "
+                "summary TEXT, length TEXT, model TEXT, created_at TEXT)"
+            )
+            conn.execute(
+                "INSERT INTO summaries VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    "old-id",
+                    "/old.pdf",
+                    "hash",
+                    1,
+                    "旧要約",
+                    "standard",
+                    "old-model",
+                    "2026-01-01T00:00:00+00:00",
+                ),
+            )
+
+        sink = PdfsumSink(db_path, length="standard")
+        sink.write(sample_digest, Item(id=str(pdf_file), payload=pdf_file))
+
+        rows = {str(row["id"]): row for row in _fetch_rows(db_path)}
+        assert rows["old-id"]["summary"] == "旧要約"
+        assert rows["old-id"]["tokens_in"] is None
+        new_row = next(row for row_id, row in rows.items() if row_id != "old-id")
+        assert new_row["tokens_in"] == 10
+        assert new_row["tokens_out"] == 20
+
     def test_str_db_path_is_accepted(
         self, tmp_path: Path, pdf_file: Path, sample_digest: Digest
     ) -> None:

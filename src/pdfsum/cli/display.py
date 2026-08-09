@@ -7,6 +7,19 @@ from pdfsum.models.summary import Summary
 SEPARATOR = "━" * 40
 
 
+def _format_token_usage(summary: Summary) -> str:
+    """トークン使用量を "トークン: 入力 1,234 / 出力 567" 形式にする。
+
+    issue #21 のカラム追加より前に保存された要約は値を持たないので、
+    その場合は空文字を返して表示自体を省く。
+    """
+    if summary.tokens_in is None and summary.tokens_out is None:
+        return ""
+    tokens_in = f"{summary.tokens_in:,}" if summary.tokens_in is not None else "-"
+    tokens_out = f"{summary.tokens_out:,}" if summary.tokens_out is not None else "-"
+    return f"トークン: 入力 {tokens_in} / 出力 {tokens_out}"
+
+
 def print_summary_result(summary: Summary) -> None:
     """要約結果を表示する。
 
@@ -19,10 +32,11 @@ def print_summary_result(summary: Summary) -> None:
     print(summary.summary_text)
     print()
     print(SEPARATOR)
-    print(
-        f"モデル: {summary.model_name} | "
-        f"要約ID: {summary.id}"
-    )
+    footer = f"モデル: {summary.model_name} | 要約ID: {summary.id}"
+    usage = _format_token_usage(summary)
+    if usage:
+        footer += f" | {usage}"
+    print(footer)
 
 
 def print_summary_list(
@@ -91,6 +105,11 @@ def print_summary_detail(summary: Summary) -> None:
     print(f"ページ数: {summary.page_count}")
     print(f"要約長: {summary.summary_length}")
     print(f"モデル: {summary.model_name}")
+    usage = _format_token_usage(summary)
+    if usage:
+        print(usage)
+    if summary.latency_ms is not None:
+        print(f"所要時間: {summary.latency_ms / 1000:.1f}秒")
     print(
         f"作成日時: "
         f"{summary.created_at.strftime('%Y-%m-%d %H:%M:%S')}"
