@@ -11,12 +11,14 @@ import pypdfium2 as pdfium  # pyright: ignore[reportMissingTypeStubs]  # 型ス�
 from digestkit.sinks import SinkError
 from digestkit.types import Digest, Item
 
-_CREATE_TABLE = (
-    "CREATE TABLE IF NOT EXISTS summaries ("
-    "id TEXT PRIMARY KEY, pdf_path TEXT, pdf_hash TEXT, page_count INTEGER, "
-    "summary TEXT, length TEXT, model TEXT, created_at TEXT)"
+from pdfsum.db import ensure_schema
+
+_INSERT = (
+    "INSERT INTO summaries "
+    "(id, pdf_path, pdf_hash, page_count, summary, length, model, created_at, "
+    "tokens_in, tokens_out, latency_ms) "
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 )
-_INSERT = "INSERT INTO summaries VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
 
 
 class PdfsumSink:
@@ -34,8 +36,7 @@ class PdfsumSink:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._length = length
         self._conn = sqlite3.connect(self._db_path)
-        self._conn.execute(_CREATE_TABLE)
-        self._conn.commit()
+        ensure_schema(self._conn)
 
     def write(self, digest: Digest, item: Item) -> None:
         try:
@@ -55,6 +56,9 @@ class PdfsumSink:
                         self._length,
                         digest.model,
                         datetime.now(UTC).isoformat(),
+                        digest.tokens_in,
+                        digest.tokens_out,
+                        digest.latency_ms,
                     ),
                 )
         except sqlite3.Error as e:

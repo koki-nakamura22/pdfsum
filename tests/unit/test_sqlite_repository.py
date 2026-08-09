@@ -10,7 +10,12 @@ import pytest
 from pdfsum.errors import PdfsumError
 from pdfsum.repositories.sqlite import SummaryReader
 
-_INSERT = "INSERT INTO summaries VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+_INSERT = (
+    "INSERT INTO summaries "
+    "(id, pdf_path, pdf_hash, page_count, summary, length, model, created_at, "
+    "tokens_in, tokens_out, latency_ms) "
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+)
 
 
 def _insert(
@@ -24,11 +29,26 @@ def _insert(
     length: str = "standard",
     model: str = "test-model",
     created_at: str = "2026-01-01T00:00:00+00:00",
+    tokens_in: int | None = None,
+    tokens_out: int | None = None,
+    latency_ms: int | None = None,
 ) -> None:
     conn = sqlite3.connect(str(db_path))
     conn.execute(
         _INSERT,
-        (id, pdf_path, pdf_hash, page_count, summary, length, model, created_at),
+        (
+            id,
+            pdf_path,
+            pdf_hash,
+            page_count,
+            summary,
+            length,
+            model,
+            created_at,
+            tokens_in,
+            tokens_out,
+            latency_ms,
+        ),
     )
     conn.commit()
     conn.close()
@@ -69,6 +89,38 @@ class TestSummaryReader:
         assert result.model_name == "m1"
         assert result.file_name == "a.pdf"
         assert result.page_count == 0
+
+    def test_get_returns_token_usage(self, tmp_path: Path) -> None:
+        db = tmp_path / "test.db"
+        reader = SummaryReader(db)
+        _insert(
+            db,
+            id="id1",
+            pdf_path="/a.pdf",
+            tokens_in=1234,
+            tokens_out=567,
+            latency_ms=8901,
+        )
+
+        result = reader.get("id1")
+
+        assert result is not None
+        assert result.tokens_in == 1234
+        assert result.tokens_out == 567
+        assert result.latency_ms == 8901
+
+    def test_get_returns_none_usage_for_legacy_row(self, tmp_path: Path) -> None:
+        """使用量カラム追加前に保存された行 (NULL) は None として読める"""
+        db = tmp_path / "test.db"
+        reader = SummaryReader(db)
+        _insert(db, id="id1", pdf_path="/a.pdf")
+
+        result = reader.get("id1")
+
+        assert result is not None
+        assert result.tokens_in is None
+        assert result.tokens_out is None
+        assert result.latency_ms is None
 
     def test_get_by_prefix_single_match(self, tmp_path: Path) -> None:
         db = tmp_path / "test.db"

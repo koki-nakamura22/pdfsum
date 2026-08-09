@@ -38,3 +38,7 @@ class Summary:
     summary_length: str  # "short" | "standard" | "detailed"
     model_name: str  # 使用したLLMモデル名
     created_at: datetime  # 作成日時
+    # 使用量。カラム追加 (issue #21) 前に保存された要約は None になる
+    tokens_in: int | None = None  # 入力トークン数
+    tokens_out: int | None = None  # 出力トークン数
+    latency_ms: int | None = None  # LLM 呼び出しの所要時間 (ミリ秒)
