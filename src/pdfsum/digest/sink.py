@@ -7,7 +7,7 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
-import pypdf
+import pypdfium2 as pdfium  # pyright: ignore[reportMissingTypeStubs]  # 型スタブ未提供
 from digestkit.sinks import SinkError
 from digestkit.types import Digest, Item
 
@@ -23,7 +23,7 @@ class PdfsumSink:
     """digestkit Sink プロトコルを実装し pdfsum スキーマへ書き込む.
 
     Item.id (= PDF ファイルパス文字列) から Path を復元し、SHA-256 と
-    page_count (pypdf 経由) を計算、UUID v4 + length (CLI 引数) と組み合わせて
+    page_count (pypdfium2 経由) を計算、UUID v4 + length (CLI 引数) と組み合わせて
     summaries テーブルへ INSERT する。page_count は外部表示 (`show` の "ページ数")
     で使われる公開フィールドなので、digestkit Digest に乗らない情報を pdfsum
     側でこのタイミングだけ計算する。
@@ -62,8 +62,14 @@ class PdfsumSink:
 
 
 def _count_pages(pdf_path: Path) -> int:
-    """PDF のページ数を pypdf で取得する. 失敗時は 0 を返す (best-effort)."""
+    """PDF のページ数を pypdfium2 で取得する. 失敗時は 0 を返す (best-effort)."""
     try:
-        return len(pypdf.PdfReader(str(pdf_path)).pages)
+        doc = pdfium.PdfDocument(str(pdf_path))
     except Exception:
         return 0
+    try:
+        return len(doc)
+    except Exception:
+        return 0
+    finally:
+        doc.close()
