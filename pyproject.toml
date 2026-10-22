@@ -31,6 +31,12 @@ pdfsum = "pdfsum.cli.app:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.uv]
+# certifi は間接の依存で、版を決めているのは uv.lock だけ。uv.lock の衝突を古い側で解くと、
+# eMudhra (emSign) の侵害で外された emSign ECC Root CA - G3 を信頼する版に気づかず戻る。
+# 下限を制約にしておき、戻ったら `uv lock --check` / `uv sync --locked` で止める。
+constraint-dependencies = ["certifi>=2026.10.19"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/pdfsum"]
 
